@@ -12,6 +12,8 @@ class News extends Model
     protected $table = 'news';
     
     protected $primaryKey = 'ID'; // The table uses 'ID' (uppercase) as primary key
+    public $incrementing = true; // ID is auto-incrementing
+    protected $keyType = 'int'; // ID is an integer
     
     public $timestamps = false; // Disable timestamps since we use CreatedAt field
 

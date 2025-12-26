@@ -13,6 +13,27 @@ class ShopView extends Model
     
     public $timestamps = false; // Disable timestamps since we use CreatedAt field
 
+    /**
+     * The primary key for the model.
+     *
+     * @var string
+     */
+    protected $primaryKey = 'ID'; // Uppercase ID as per table structure
+
+    /**
+     * Indicates if the IDs are auto-incrementing.
+     *
+     * @var bool
+     */
+    public $incrementing = true;
+
+    /**
+     * The "type" of the primary key ID.
+     *
+     * @var string
+     */
+    protected $keyType = 'int';
+
     protected $fillable = [
         'Shop_ID', 'User_ID', 'CreatedAt'
     ];

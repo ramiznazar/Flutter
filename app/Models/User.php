@@ -13,6 +13,27 @@ class User extends Model
     
     public $timestamps = false; // Disable timestamps since we use custom date fields
 
+    /**
+     * The primary key for the model.
+     *
+     * @var string
+     */
+    protected $primaryKey = 'id';
+
+    /**
+     * Indicates if the IDs are auto-incrementing.
+     *
+     * @var bool
+     */
+    public $incrementing = true;
+
+    /**
+     * The "type" of the primary key ID.
+     *
+     * @var string
+     */
+    protected $keyType = 'int'; // Using 'int' to match SQL backup, change to 'string' if using UUID
+
     protected $fillable = [
         'name', 'email', 'phone', 'country', 'password', 'token', 'coin',
         'is_mining', 'mining_end_time', 'coin_end_time', 'total_coin_claim',

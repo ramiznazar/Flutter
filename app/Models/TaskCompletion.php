@@ -13,9 +13,30 @@ class TaskCompletion extends Model
     
     public $timestamps = false; // Only has created_at, not updated_at, so disable timestamps
 
+    /**
+     * The primary key for the model.
+     *
+     * @var string
+     */
+    protected $primaryKey = 'id';
+
+    /**
+     * Indicates if the IDs are auto-incrementing.
+     *
+     * @var bool
+     */
+    public $incrementing = true;
+
+    /**
+     * The "type" of the primary key ID.
+     *
+     * @var string
+     */
+    protected $keyType = 'int';
+
     protected $fillable = [
         'user_id', 'task_id', 'task_type', 'started_at',
-        'reward_available_at', 'reward_claimed', 'reward_claimed_at'
+        'reward_available_at', 'reward_claimed', 'reward_claimed_at', 'created_at'
     ];
 
     protected $casts = [

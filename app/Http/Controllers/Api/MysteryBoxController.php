@@ -186,9 +186,17 @@ class MysteryBoxController extends Controller
         }
 
         $settings = Setting::first();
+        
+        if (!$settings) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Settings not found. Please contact administrator.'
+            ], 404);
+        }
+        
         $boxType = $request->box_type;
-        $minCoins = (float) $settings->{"{$boxType}_box_min_coins"};
-        $maxCoins = (float) $settings->{"{$boxType}_box_max_coins"};
+        $minCoins = (float) ($settings->{"{$boxType}_box_min_coins"} ?? 1.00);
+        $maxCoins = (float) ($settings->{"{$boxType}_box_max_coins"} ?? 5.00);
 
         $claim = MysteryBoxClaim::where('user_id', $user->id)
             ->where('box_type', $boxType)

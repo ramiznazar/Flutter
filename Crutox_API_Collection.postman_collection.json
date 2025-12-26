@@ -1,0 +1,2076 @@
+{
+	"info": {
+		"_postman_id": "crutox-api-collection-2024",
+		"name": "Crutox API Collection",
+		"description": "Complete API collection for Crutox application - Mining Game API",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "crutox-api"
+	},
+	"item": [
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "Login",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\",\n    \"password\": \"11221122\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/login",
+							"host": ["{{base_url}}"],
+							"path": ["api", "login"]
+						},
+						"description": "User login endpoint. Returns user data and auth_token."
+					}
+				},
+				{
+					"name": "Signup",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"John Doe\",\n    \"email\": \"user@example.com\",\n    \"phone\": \"+1234567890\",\n    \"country\": \"US\",\n    \"password\": \"11221122\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/signup",
+							"host": ["{{base_url}}"],
+							"path": ["api", "signup"]
+						},
+						"description": "User registration endpoint."
+					}
+				},
+				{
+					"name": "Create Account (Alias)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"John Doe\",\n    \"email\": \"user@example.com\",\n    \"phone\": \"+1234567890\",\n    \"country\": \"US\",\n    \"password\": \"11221122\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/create_account",
+							"host": ["{{base_url}}"],
+							"path": ["api", "create_account"]
+						},
+						"description": "Alias for signup endpoint."
+					}
+				},
+				{
+					"name": "OTP Request",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/otp_request",
+							"host": ["{{base_url}}"],
+							"path": ["api", "otp_request"]
+						},
+						"description": "Request OTP for password reset. Sends 6-digit OTP to email."
+					}
+				},
+				{
+					"name": "OTP Request New",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/otp_request_new",
+							"host": ["{{base_url}}"],
+							"path": ["api", "otp_request_new"]
+						},
+						"description": "Alias for OTP request endpoint."
+					}
+				},
+				{
+					"name": "Verify OTP",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\",\n    \"code\": 123456\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/verify_otp",
+							"host": ["{{base_url}}"],
+							"path": ["api", "verify_otp"]
+						},
+						"description": "Verify OTP code sent to email."
+					}
+				},
+				{
+					"name": "Verify OTP and Set Password",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\",\n    \"reason\": \"set\",\n    \"code\": 123456,\n    \"new_password\": \"newpassword123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/verify_otp_and_set_password",
+							"host": ["{{base_url}}"],
+							"path": ["api", "verify_otp_and_set_password"]
+						},
+						"description": "Verify OTP and set new password. reason can be 'get' (verify only) or 'set' (verify and set password)."
+					}
+				},
+				{
+					"name": "Change Password",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\",\n    \"old_password\": \"oldpassword\",\n    \"new_password\": \"newpassword123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/change_password",
+							"host": ["{{base_url}}"],
+							"path": ["api", "change_password"]
+						},
+						"description": "Change password with old password verification."
+					}
+				},
+				{
+					"name": "Reset Password",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/reset_password",
+							"host": ["{{base_url}}"],
+							"path": ["api", "reset_password"]
+						},
+						"description": "Trigger password reset flow (sends OTP)."
+					}
+				},
+				{
+					"name": "Get Email",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/get_email?email=user@example.com&otp=123456",
+							"host": ["{{base_url}}"],
+							"path": ["api", "get_email"],
+							"query": [
+								{
+									"key": "email",
+									"value": "user@example.com"
+								},
+								{
+									"key": "otp",
+									"value": "123456"
+								}
+							]
+						},
+						"description": "Update OTP for email. GET request with query parameters."
+					}
+				}
+			]
+		},
+		{
+			"name": "User",
+			"item": [
+				{
+					"name": "Get User Stats",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/get_user_stats",
+							"host": ["{{base_url}}"],
+							"path": ["api", "get_user_stats"]
+						},
+						"description": "Get user statistics including mining sessions and referrals."
+					}
+				},
+				{
+					"name": "Update Profile",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"full_name\": \"John Doe\",\n    \"old_email\": \"old@example.com\",\n    \"new_email\": \"new@example.com\",\n    \"country\": \"US\",\n    \"phone_number\": \"+1234567890\",\n    \"profile_url\": \"https://example.com/profile.jpg\",\n    \"password\": \"11221122\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/update_profile",
+							"host": ["{{base_url}}"],
+							"path": ["api", "update_profile"]
+						},
+						"description": "Update user profile information."
+					}
+				},
+				{
+					"name": "Edit Profile",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"full_name\": \"John Doe\",\n    \"old_email\": \"old@example.com\",\n    \"new_email\": \"new@example.com\",\n    \"country\": \"US\",\n    \"phone_number\": \"+1234567890\",\n    \"profile_url\": \"https://example.com/profile.jpg\",\n    \"password\": \"11221122\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/edit_profile",
+							"host": ["{{base_url}}"],
+							"path": ["api", "edit_profile"]
+						},
+						"description": "Alias for update_profile endpoint."
+					}
+				},
+				{
+					"name": "Change Profile Picture",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\",\n    \"password\": \"11221122\",\n    \"profile_url\": \"https://example.com/profile.jpg\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/change_pic",
+							"host": ["{{base_url}}"],
+							"path": ["api", "change_pic"]
+						},
+						"description": "Update user profile picture URL."
+					}
+				},
+				{
+					"name": "Get Team",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/get_team",
+							"host": ["{{base_url}}"],
+							"path": ["api", "get_team"]
+						},
+						"description": "Get user's referral team members."
+					}
+				},
+				{
+					"name": "Get Level",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/getLevel",
+							"host": ["{{base_url}}"],
+							"path": ["api", "getLevel"]
+						},
+						"description": "Get user's current level information."
+					}
+				},
+				{
+					"name": "Get Badges",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/getBadges",
+							"host": ["{{base_url}}"],
+							"path": ["api", "getBadges"]
+						},
+						"description": "Get user's earned badges."
+					}
+				},
+				{
+					"name": "Check Levels",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/check_levels",
+							"host": ["{{base_url}}"],
+							"path": ["api", "check_levels"]
+						},
+						"description": "Check and update user levels based on achievements."
+					}
+				},
+				{
+					"name": "Update User Guide",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\",\n    \"password\": \"11221122\",\n    \"home\": true,\n    \"mining\": true,\n    \"wallet\": true,\n    \"badges\": true,\n    \"level\": true,\n    \"teamProfile\": true,\n    \"news\": true,\n    \"shop\": true,\n    \"userProfile\": true\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/update_user_guide",
+							"host": ["{{base_url}}"],
+							"path": ["api", "update_user_guide"]
+						},
+						"description": "Update user guide completion status for various sections."
+					}
+				},
+				{
+					"name": "Update User Ping",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\",\n    \"password\": \"11221122\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/update_user_ping",
+							"host": ["{{base_url}}"],
+							"path": ["api", "update_user_ping"]
+						},
+						"description": "Update user's last active time (ping endpoint)."
+					}
+				},
+				{
+					"name": "Setup Username",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\",\n    \"password\": \"11221122\",\n    \"username\": \"johndoe123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/setup_username",
+							"host": ["{{base_url}}"],
+							"path": ["api", "setup_username"]
+						},
+						"description": "Set or update username for the user."
+					}
+				},
+				{
+					"name": "Setup Invite",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\",\n    \"password\": \"11221122\",\n    \"invite_code\": \"12345\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/setup_invite",
+							"host": ["{{base_url}}"],
+							"path": ["api", "setup_invite"]
+						},
+						"description": "Set invite code (referrer ID or username) for the user."
+					}
+				},
+				{
+					"name": "Delete Account Request",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\",\n    \"password\": \"11221122\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/delete_account_request",
+							"host": ["{{base_url}}"],
+							"path": ["api", "delete_account_request"]
+						},
+						"description": "Request account deletion. Sets account status to pending_deletion."
+					}
+				},
+				{
+					"name": "Reactivate Account",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/reactivate_account",
+							"host": ["{{base_url}}"],
+							"path": ["api", "reactivate_account"]
+						},
+						"description": "Reactivate a deactivated account."
+					}
+				}
+			]
+		},
+		{
+			"name": "Mining",
+			"item": [
+				{
+					"name": "Start Mining",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\",\n    \"password\": \"11221122\",\n    \"coins\": 10,\n    \"reason\": \"start\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/start_mining",
+							"host": ["{{base_url}}"],
+							"path": ["api", "start_mining"]
+						},
+						"description": "Start mining session. reason can be 'get' (check status) or 'start' (start mining). coins is the number of coins to use for mining."
+					}
+				},
+				{
+					"name": "Start Coin",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\",\n    \"password\": \"11221122\",\n    \"reason\": \"start\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/start_coin",
+							"host": ["{{base_url}}"],
+							"path": ["api", "start_coin"]
+						},
+						"description": "Claim coins. reason can be 'get' (check status) or 'start' (claim coin)."
+					}
+				},
+				{
+					"name": "Claim Bonus",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\",\n    \"password\": \"11221122\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/claim_bonus",
+							"host": ["{{base_url}}"],
+							"path": ["api", "claim_bonus"]
+						},
+						"description": "Claim bonus rewards."
+					}
+				},
+				{
+					"name": "Bonus History",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\",\n    \"password\": \"11221122\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/bonus_history",
+							"host": ["{{base_url}}"],
+							"path": ["api", "bonus_history"]
+						},
+						"description": "Get bonus claim history."
+					}
+				},
+				{
+					"name": "Social Claim",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\",\n    \"password\": \"11221122\",\n    \"ID\": 1\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/social_claim",
+							"host": ["{{base_url}}"],
+							"path": ["api", "social_claim"]
+						},
+						"description": "Claim tokens from social media task. ID is the social_media_setting ID."
+					}
+				},
+				{
+					"name": "Social List",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\",\n    \"password\": \"11221122\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/social_list",
+							"host": ["{{base_url}}"],
+							"path": ["api", "social_list"]
+						},
+						"description": "Get list of social media tasks with claim status."
+					}
+				}
+			]
+		},
+		{
+			"name": "Tasks",
+			"item": [
+				{
+					"name": "Task Start",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\",\n    \"password\": \"11221122\",\n    \"task_id\": 1,\n    \"task_type\": \"daily\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/task_start",
+							"host": ["{{base_url}}"],
+							"path": ["api", "task_start"]
+						},
+						"description": "Start a task. task_type can be 'daily' or 'onetime'. Returns reward_available_at timestamp."
+					}
+				},
+				{
+					"name": "Task Claim Reward",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\",\n    \"password\": \"11221122\",\n    \"task_id\": 1,\n    \"task_type\": \"daily\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/task_claim_reward",
+							"host": ["{{base_url}}"],
+							"path": ["api", "task_claim_reward"]
+						},
+						"description": "Claim reward for a completed task. task_type can be 'daily' or 'onetime'."
+					}
+				},
+				{
+					"name": "Task Track",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\",\n    \"task_id\": 1,\n    \"task_type\": \"daily\",\n    \"action\": \"started\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/task_track",
+							"host": ["{{base_url}}"],
+							"path": ["api", "task_track"]
+						},
+						"description": "Track task interaction. action can be 'started', 'completed', 'claimed', etc."
+					}
+				}
+			]
+		},
+		{
+			"name": "KYC",
+			"item": [
+				{
+					"name": "Check Eligibility",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\",\n    \"password\": \"11221122\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/kyc_check_eligibility",
+							"host": ["{{base_url}}"],
+							"path": ["api", "kyc_check_eligibility"]
+						},
+						"description": "Check if user is eligible for KYC submission (requires 14 mining sessions and 10 referrals)."
+					}
+				},
+				{
+					"name": "Submit KYC",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\",\n    \"password\": \"11221122\",\n    \"full_name\": \"John Doe\",\n    \"dob\": \"1990-01-15\",\n    \"front_image\": \"data:image/jpeg;base64,/9j/4AAQSkZJRg...\",\n    \"back_image\": \"data:image/jpeg;base64,/9j/4AAQSkZJRg...\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/kyc_submit",
+							"host": ["{{base_url}}"],
+							"path": ["api", "kyc_submit"]
+						},
+						"description": "Submit KYC documents. Images should be base64 encoded. Date format: YYYY-MM-DD. Automatically verifies with Didit API."
+					}
+				},
+				{
+					"name": "Submit KYC (Alias)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\",\n    \"password\": \"11221122\",\n    \"full_name\": \"John Doe\",\n    \"dob\": \"1990-01-15\",\n    \"front_image\": \"data:image/jpeg;base64,/9j/4AAQSkZJRg...\",\n    \"back_image\": \"data:image/jpeg;base64,/9j/4AAQSkZJRg...\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/submit_kyc",
+							"host": ["{{base_url}}"],
+							"path": ["api", "submit_kyc"]
+						},
+						"description": "Alias for kyc_submit endpoint."
+					}
+				},
+				{
+					"name": "Get KYC Status",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\",\n    \"password\": \"11221122\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/kyc_get_status",
+							"host": ["{{base_url}}"],
+							"path": ["api", "kyc_get_status"]
+						},
+						"description": "Get current KYC submission status."
+					}
+				},
+				{
+					"name": "Get KYC Progress",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\",\n    \"password\": \"11221122\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/get_kyc_progress",
+							"host": ["{{base_url}}"],
+							"path": ["api", "get_kyc_progress"]
+						},
+						"description": "Get KYC progress information."
+					}
+				}
+			]
+		},
+		{
+			"name": "News",
+			"item": [
+				{
+					"name": "Get All News",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\",\n    \"page\": 1,\n    \"perPage\": 10\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/get_all_news",
+							"host": ["{{base_url}}"],
+							"path": ["api", "get_all_news"]
+						},
+						"description": "Get paginated list of news articles with like status."
+					}
+				},
+				{
+					"name": "Get News",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\",\n    \"page\": 1,\n    \"perPage\": 10\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/get_news",
+							"host": ["{{base_url}}"],
+							"path": ["api", "get_news"]
+						},
+						"description": "Alias for get_all_news endpoint."
+					}
+				},
+				{
+					"name": "Like News",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\",\n    \"password\": \"11221122\",\n    \"news_id\": 1\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/like_news",
+							"host": ["{{base_url}}"],
+							"path": ["api", "like_news"]
+						},
+						"description": "Like or unlike a news article."
+					}
+				},
+				{
+					"name": "Set News View",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\",\n    \"password\": \"11221122\",\n    \"news_id\": 1\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/set_news_view",
+							"host": ["{{base_url}}"],
+							"path": ["api", "set_news_view"]
+						},
+						"description": "Track news view (alias for like_news)."
+					}
+				}
+			]
+		},
+		{
+			"name": "Shop",
+			"item": [
+				{
+					"name": "Get All Shops",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\",\n    \"page\": 1,\n    \"perPage\": 10\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/get_all_shops",
+							"host": ["{{base_url}}"],
+							"path": ["api", "get_all_shops"]
+						},
+						"description": "Get paginated list of shop items/giftcards with view status."
+					}
+				},
+				{
+					"name": "Set Shop View",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\",\n    \"password\": \"11221122\",\n    \"shop_id\": 1\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/set_shop_view",
+							"host": ["{{base_url}}"],
+							"path": ["api", "set_shop_view"]
+						},
+						"description": "Record shop item view."
+					}
+				},
+				{
+					"name": "Track Giftcard",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\",\n    \"shop_id\": 1,\n    \"action\": \"viewed\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/giftcard_track",
+							"host": ["{{base_url}}"],
+							"path": ["api", "giftcard_track"]
+						},
+						"description": "Track giftcard interaction. action can be 'viewed', 'clicked', 'purchased', etc."
+					}
+				}
+			]
+		},
+		{
+			"name": "Giveaway",
+			"item": [
+				{
+					"name": "Get Giveaway",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"page\": 1,\n    \"perPage\": 10\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/get_giveaway",
+							"host": ["{{base_url}}"],
+							"path": ["api", "get_giveaway"]
+						},
+						"description": "Get paginated list of giveaways."
+					}
+				}
+			]
+		},
+		{
+			"name": "Booster",
+			"item": [
+				{
+					"name": "Booster Status",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\",\n    \"password\": \"11221122\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/booster_status",
+							"host": ["{{base_url}}"],
+							"path": ["api", "booster_status"]
+						},
+						"description": "Get active booster status for user."
+					}
+				},
+				{
+					"name": "Booster Claim",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\",\n    \"password\": \"11221122\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/booster_claim",
+							"host": ["{{base_url}}"],
+							"path": ["api", "booster_claim"]
+						},
+						"description": "Activate a booster (2x multiplier for 1 hour)."
+					}
+				}
+			]
+		},
+		{
+			"name": "Mystery Box",
+			"item": [
+				{
+					"name": "Watch Ad",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\",\n    \"box_type\": \"common\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/mystery_box_watch_ad",
+							"host": ["{{base_url}}"],
+							"path": ["api", "mystery_box_watch_ad"]
+						},
+						"description": "Watch ad to progress toward opening mystery box. box_type can be 'common', 'rare', 'epic', or 'legendary'."
+					}
+				},
+				{
+					"name": "Click",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\",\n    \"box_type\": \"common\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/mystery_box_click",
+							"host": ["{{base_url}}"],
+							"path": ["api", "mystery_box_click"]
+						},
+						"description": "Track mystery box click interaction."
+					}
+				},
+				{
+					"name": "Open",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\",\n    \"box_type\": \"common\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/mystery_box_open",
+							"host": ["{{base_url}}"],
+							"path": ["api", "mystery_box_open"]
+						},
+						"description": "Open mystery box and claim reward coins."
+					}
+				}
+			]
+		},
+		{
+			"name": "Spin",
+			"item": [
+				{
+					"name": "Spin",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/spin",
+							"host": ["{{base_url}}"],
+							"path": ["api", "spin"]
+						},
+						"description": "Get available spin wheel prizes."
+					}
+				},
+				{
+					"name": "Spin Claim",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\",\n    \"password\": \"11221122\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/spin_claim",
+							"host": ["{{base_url}}"],
+							"path": ["api", "spin_claim"]
+						},
+						"description": "Claim spin wheel reward."
+					}
+				},
+				{
+					"name": "Get My Spin Info",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"user@example.com\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/get_myspin_info",
+							"host": ["{{base_url}}"],
+							"path": ["api", "get_myspin_info"]
+						},
+						"description": "Get user's spin wheel information and settings."
+					}
+				}
+			]
+		},
+		{
+			"name": "Settings",
+			"item": [
+				{
+					"name": "Other Settings",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/other_settings",
+							"host": ["{{base_url}}"],
+							"path": ["api", "other_settings"]
+						},
+						"description": "Get all system settings."
+					}
+				},
+				{
+					"name": "Get Currencies",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/get_currencies",
+							"host": ["{{base_url}}"],
+							"path": ["api", "get_currencies"]
+						},
+						"description": "Get currency exchange rates."
+					}
+				},
+				{
+					"name": "Get Total Users",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/getTotalUsers",
+							"host": ["{{base_url}}"],
+							"path": ["api", "getTotalUsers"]
+						},
+						"description": "Get total user count statistics."
+					}
+				},
+				{
+					"name": "Time",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/time",
+							"host": ["{{base_url}}"],
+							"path": ["api", "time"]
+						},
+						"description": "Get server time and timestamp."
+					}
+				},
+				{
+					"name": "Ads",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/ads",
+							"host": ["{{base_url}}"],
+							"path": ["api", "ads"]
+						},
+						"description": "Get advertisement settings (AppLovin SDK keys, ad unit IDs, etc.)."
+					}
+				}
+			]
+		},
+		{
+			"name": "Utility",
+			"item": [
+				{
+					"name": "Send Notification",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"Notification Title\",\n    \"message\": \"Notification message body\",\n    \"userId\": \"user123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/send_notification",
+							"host": ["{{base_url}}"],
+							"path": ["api", "send_notification"]
+						},
+						"description": "Send push notification via OneSignal to a specific user."
+					}
+				}
+			]
+		},
+		{
+			"name": "Admin",
+			"item": [
+				{
+					"name": "Admin Login",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"admin@crutox.com\",\n    \"password\": \"admin$$$@@@\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/login_admin",
+							"host": ["{{base_url}}"],
+							"path": ["api", "login_admin"]
+						},
+						"description": "Admin login endpoint."
+					}
+				},
+				{
+					"name": "News Management",
+					"item": [
+						{
+							"name": "Get All News",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/admin/news_manage",
+									"host": ["{{base_url}}"],
+									"path": ["api", "admin", "news_manage"]
+								},
+								"description": "Get all news articles for admin."
+							}
+						},
+						{
+							"name": "Create News",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"news_title\": \"News Title\",\n    \"news_content\": \"News content here\",\n    \"redirect_link\": \"https://example.com\",\n    \"image\": \"https://example.com/image.jpg\",\n    \"status\": \"active\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/admin/news_manage",
+									"host": ["{{base_url}}"],
+									"path": ["api", "admin", "news_manage"]
+								},
+								"description": "Create a new news article."
+							}
+						},
+						{
+							"name": "Update News",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"news_title\": \"Updated Title\",\n    \"news_content\": \"Updated content\",\n    \"redirect_link\": \"https://example.com\",\n    \"image\": \"https://example.com/image.jpg\",\n    \"status\": \"active\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/admin/news_manage/1",
+									"host": ["{{base_url}}"],
+									"path": ["api", "admin", "news_manage", "1"]
+								},
+								"description": "Update a news article by ID."
+							}
+						},
+						{
+							"name": "Delete News",
+							"request": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/admin/news_manage/1",
+									"host": ["{{base_url}}"],
+									"path": ["api", "admin", "news_manage", "1"]
+								},
+								"description": "Delete a news article by ID."
+							}
+						}
+					]
+				},
+				{
+					"name": "Tasks Management",
+					"item": [
+						{
+							"name": "Get All Tasks",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/admin/tasks_manage?type=all",
+									"host": ["{{base_url}}"],
+									"path": ["api", "admin", "tasks_manage"],
+									"query": [
+										{
+											"key": "type",
+											"value": "all",
+											"description": "Can be 'daily', 'onetime', or 'all'"
+										}
+									]
+								},
+								"description": "Get all tasks. Query parameter: type (daily/onetime/all)."
+							}
+						},
+						{
+							"name": "Create Task",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"task_title\": \"Task Title\",\n    \"task_link\": \"https://example.com\",\n    \"token\": 100,\n    \"task_type\": \"daily\",\n    \"status\": \"active\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/admin/tasks_manage",
+									"host": ["{{base_url}}"],
+									"path": ["api", "admin", "tasks_manage"]
+								},
+								"description": "Create a new task."
+							}
+						},
+						{
+							"name": "Update Task",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"task_title\": \"Updated Title\",\n    \"task_link\": \"https://example.com\",\n    \"token\": 150,\n    \"task_type\": \"daily\",\n    \"status\": \"active\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/admin/tasks_manage/1",
+									"host": ["{{base_url}}"],
+									"path": ["api", "admin", "tasks_manage", "1"]
+								},
+								"description": "Update a task by ID."
+							}
+						},
+						{
+							"name": "Delete Task",
+							"request": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/admin/tasks_manage/1",
+									"host": ["{{base_url}}"],
+									"path": ["api", "admin", "tasks_manage", "1"]
+								},
+								"description": "Delete a task by ID."
+							}
+						}
+					]
+				},
+				{
+					"name": "Shop Management",
+					"item": [
+						{
+							"name": "Get All Shop Items",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/admin/shop_manage",
+									"host": ["{{base_url}}"],
+									"path": ["api", "admin", "shop_manage"]
+								},
+								"description": "Get all shop items."
+							}
+						},
+						{
+							"name": "Create Shop Item",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"title\": \"Shop Item Title\",\n    \"link\": \"https://example.com\",\n    \"image\": \"https://example.com/image.jpg\",\n    \"description\": \"Item description\",\n    \"price\": 99.99,\n    \"status\": \"active\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/admin/shop_manage",
+									"host": ["{{base_url}}"],
+									"path": ["api", "admin", "shop_manage"]
+								},
+								"description": "Create a new shop item."
+							}
+						},
+						{
+							"name": "Update Shop Item",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"title\": \"Updated Title\",\n    \"link\": \"https://example.com\",\n    \"image\": \"https://example.com/image.jpg\",\n    \"description\": \"Updated description\",\n    \"price\": 149.99,\n    \"status\": \"active\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/admin/shop_manage/1",
+									"host": ["{{base_url}}"],
+									"path": ["api", "admin", "shop_manage", "1"]
+								},
+								"description": "Update a shop item by ID."
+							}
+						},
+						{
+							"name": "Delete Shop Item",
+							"request": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/admin/shop_manage/1",
+									"host": ["{{base_url}}"],
+									"path": ["api", "admin", "shop_manage", "1"]
+								},
+								"description": "Delete a shop item by ID."
+							}
+						}
+					]
+				},
+				{
+					"name": "Giveaway Management",
+					"item": [
+						{
+							"name": "Get All Giveaways",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/admin/giveaway_manage",
+									"host": ["{{base_url}}"],
+									"path": ["api", "admin", "giveaway_manage"]
+								},
+								"description": "Get all giveaways."
+							}
+						},
+						{
+							"name": "Create Giveaway",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"title\": \"Giveaway Title\",\n    \"description\": \"Giveaway description\",\n    \"reward\": \"1000 tokens\",\n    \"start_date\": \"2024-01-01\",\n    \"end_date\": \"2024-12-31\",\n    \"status\": \"active\",\n    \"redirect_link\": \"https://example.com\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/admin/giveaway_manage",
+									"host": ["{{base_url}}"],
+									"path": ["api", "admin", "giveaway_manage"]
+								},
+								"description": "Create a new giveaway."
+							}
+						},
+						{
+							"name": "Update Giveaway",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"title\": \"Updated Title\",\n    \"description\": \"Updated description\",\n    \"reward\": \"2000 tokens\",\n    \"start_date\": \"2024-01-01\",\n    \"end_date\": \"2024-12-31\",\n    \"status\": \"active\",\n    \"redirect_link\": \"https://example.com\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/admin/giveaway_manage/1",
+									"host": ["{{base_url}}"],
+									"path": ["api", "admin", "giveaway_manage", "1"]
+								},
+								"description": "Update a giveaway by ID."
+							}
+						},
+						{
+							"name": "Delete Giveaway",
+							"request": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/admin/giveaway_manage/1",
+									"host": ["{{base_url}}"],
+									"path": ["api", "admin", "giveaway_manage", "1"]
+								},
+								"description": "Delete a giveaway by ID."
+							}
+						}
+					]
+				},
+				{
+					"name": "Settings Management",
+					"item": [
+						{
+							"name": "Get Settings",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/admin/settings_manage",
+									"host": ["{{base_url}}"],
+									"path": ["api", "admin", "settings_manage"]
+								},
+								"description": "Get all system settings."
+							}
+						},
+						{
+							"name": "Update Settings",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"mining_speed\": 10.00,\n    \"base_mining_rate\": 5.00,\n    \"max_mining_speed\": 50.00,\n    \"referrer_reward\": 50,\n    \"referee_reward\": 25,\n    \"max_referrals\": 100,\n    \"bonus_reward\": 500\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/admin/settings_manage",
+									"host": ["{{base_url}}"],
+									"path": ["api", "admin", "settings_manage"]
+								},
+								"description": "Update system settings."
+							}
+						},
+						{
+							"name": "Get Coin Speed Overall",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/admin/coin_speed_overall",
+									"host": ["{{base_url}}"],
+									"path": ["api", "admin", "coin_speed_overall"]
+								},
+								"description": "Get overall coin speed settings."
+							}
+						},
+						{
+							"name": "Update Coin Speed Overall",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"coin_speed\": 1.5\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/admin/coin_speed_overall",
+									"host": ["{{base_url}}"],
+									"path": ["api", "admin", "coin_speed_overall"]
+								},
+								"description": "Update overall coin speed multiplier."
+							}
+						}
+					]
+				},
+				{
+					"name": "Users Management",
+					"item": [
+						{
+							"name": "Get Users",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/admin/users_manage?page=1&perPage=20&search=",
+									"host": ["{{base_url}}"],
+									"path": ["api", "admin", "users_manage"],
+									"query": [
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "perPage",
+											"value": "20"
+										},
+										{
+											"key": "search",
+											"value": ""
+										}
+									]
+								},
+								"description": "Search and get users with pagination."
+							}
+						},
+						{
+							"name": "Give Coins",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"user_identifier\": \"user@example.com\",\n    \"coins\": 1000\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/admin/users_manage/give_coins",
+									"host": ["{{base_url}}"],
+									"path": ["api", "admin", "users_manage", "give_coins"]
+								},
+								"description": "Give coins to a user. user_identifier can be email or user ID."
+							}
+						},
+						{
+							"name": "Give Booster",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"user_identifier\": \"user@example.com\",\n    \"booster_type\": \"2x\",\n    \"duration_hours\": 1\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/admin/users_manage/give_booster",
+									"host": ["{{base_url}}"],
+									"path": ["api", "admin", "users_manage", "give_booster"]
+								},
+								"description": "Give a booster to a user."
+							}
+						},
+						{
+							"name": "Get User Stats",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/admin/users_manage/stats?email=user@example.com",
+									"host": ["{{base_url}}"],
+									"path": ["api", "admin", "users_manage", "stats"],
+									"query": [
+										{
+											"key": "email",
+											"value": "user@example.com"
+										}
+									]
+								},
+								"description": "Get user statistics."
+							}
+						},
+						{
+							"name": "Update User Stats",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"email\": \"user@example.com\",\n    \"mining_sessions\": 20,\n    \"referrals\": 15\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/admin/users_manage/stats",
+									"host": ["{{base_url}}"],
+									"path": ["api", "admin", "users_manage", "stats"]
+								},
+								"description": "Update user statistics (mining sessions, referrals)."
+							}
+						},
+						{
+							"name": "Get User Coin Speed",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/admin/users_manage/coin_speed?email=user@example.com",
+									"host": ["{{base_url}}"],
+									"path": ["api", "admin", "users_manage", "coin_speed"],
+									"query": [
+										{
+											"key": "email",
+											"value": "user@example.com"
+										}
+									]
+								},
+								"description": "Get user's custom coin speed."
+							}
+						},
+						{
+							"name": "Update User Coin Speed",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"email\": \"user@example.com\",\n    \"custom_coin_speed\": 2.0\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/admin/users_manage/coin_speed",
+									"host": ["{{base_url}}"],
+									"path": ["api", "admin", "users_manage", "coin_speed"]
+								},
+								"description": "Update user's custom coin speed multiplier."
+							}
+						}
+					]
+				},
+				{
+					"name": "KYC Management",
+					"item": [
+						{
+							"name": "Get All KYC Submissions",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/admin/kyc_manage?status=all&page=1&perPage=20",
+									"host": ["{{base_url}}"],
+									"path": ["api", "admin", "kyc_manage"],
+									"query": [
+										{
+											"key": "status",
+											"value": "all",
+											"description": "Can be 'pending', 'approved', 'rejected', or 'all'"
+										},
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "perPage",
+											"value": "20"
+										}
+									]
+								},
+								"description": "Get all KYC submissions with optional status filter and pagination."
+							}
+						},
+						{
+							"name": "Update KYC Status",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"status\": \"approved\",\n    \"notes\": \"Documents verified\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/admin/kyc_manage/1",
+									"host": ["{{base_url}}"],
+									"path": ["api", "admin", "kyc_manage", "1"]
+								},
+								"description": "Update KYC submission status (approved/rejected/pending)."
+							}
+						}
+					]
+				},
+				{
+					"name": "Misc Admin",
+					"item": [
+						{
+							"name": "Mystery Box Reset",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"user_identifier\": \"user@example.com\",\n    \"box_type\": \"common\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/admin/mystery_box_reset",
+									"host": ["{{base_url}}"],
+									"path": ["api", "admin", "mystery_box_reset"]
+								},
+								"description": "Reset user's mystery box progress. box_type can be 'common', 'rare', 'epic', 'legendary', or 'all'."
+							}
+						},
+						{
+							"name": "User Stats Manage",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"email\": \"user@example.com\",\n    \"mining_sessions\": 20,\n    \"referrals\": 15\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/admin/user_stats_manage",
+									"host": ["{{base_url}}"],
+									"path": ["api", "admin", "user_stats_manage"]
+								},
+								"description": "Update user statistics (mining sessions and referrals)."
+							}
+						}
+					]
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8000",
+			"type": "string"
+		}
+	]
+}
+
