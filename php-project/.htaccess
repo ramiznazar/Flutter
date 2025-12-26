@@ -1,0 +1,16 @@
+RewriteEngine On
+RewriteBase /
+
+# Allow localhost to pass through (for local development)
+RewriteCond %{HTTP_HOST} ^localhost [NC,OR]
+RewriteCond %{HTTP_HOST} ^127\.0\.0\.1 [NC,OR]
+RewriteCond %{HTTP_HOST} ^::1 [NC]
+RewriteRule .* - [L]
+
+# Production redirect (only if not localhost)
+RewriteCond %{HTTP_HOST} !^localhost [NC]
+RewriteCond %{HTTP_HOST} !^127\.0\.0\.1 [NC]
+RewriteCond %{HTTP_HOST} !^::1 [NC]
+RewriteCond %{HTTP:X-Forwarded-Proto} !https
+RewriteCond %{HTTPS} off
+RewriteRule .* http://gamez.altervista.org%{REQUEST_URI} [L,R=301]
