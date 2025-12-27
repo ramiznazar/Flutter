@@ -120,7 +120,7 @@ class MiningController extends Controller
         $usdt = (float) $coinSettings->token_price;
 
         // Check if user is mining
-        if ($user->is_mining == 1) {
+        if ($user->is_mining == 1 && $user->mining_end_time) {
             $miningEndTime = Carbon::createFromFormat('Y-m-d-H:i:s', $user->mining_end_time);
             $now = Carbon::now();
 
@@ -143,7 +143,7 @@ class MiningController extends Controller
                     'success' => true,
                     'message' => 'in_progress',
                     'server_time' => $currentTime,
-                    'mining_end_time' => $user->mining_end_time,
+                    'mining_end_time' => $user->mining_end_time ?? '',
                     'total_team' => (string) $user->total_invite,
                     'coin' => $user->coin,
                     'balance' => $user->token,
@@ -160,7 +160,7 @@ class MiningController extends Controller
                 'success' => true,
                 'message' => 'idle',
                 'server_time' => $currentTime,
-                'mining_end_time' => $user->mining_end_time,
+                'mining_end_time' => $user->mining_end_time ?? '',
                 'total_team' => (string) $user->total_invite,
                 'coin' => $user->coin,
                 'balance' => (string) $user->token,

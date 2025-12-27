@@ -114,7 +114,7 @@ Route::post('/get_myspin_info', [SpinController::class, 'getMySpinInfo']);
 // Settings Routes
 Route::post('/other_settings', [SettingsController::class, 'otherSettings']);
 Route::post('/get_currencies', [SettingsController::class, 'getCurrencies']);
-Route::post('/getTotalUsers', [SettingsController::class, 'getTotalUsers']);
+Route::get('/getTotalUsers', [SettingsController::class, 'getTotalUsers']);
 Route::post('/time', [SettingsController::class, 'time']);
 Route::post('/ads', [SettingsController::class, 'ads']);
 

@@ -11,6 +11,10 @@ class KycSubmission extends Model
 
     protected $table = 'kyc_submissions';
     
+    protected $primaryKey = 'id'; // Explicitly set primary key
+    public $incrementing = true; // ID is auto-incrementing
+    protected $keyType = 'int'; // ID is an integer
+    
     public $timestamps = true; // Has both created_at and updated_at in SQL
 
     protected $fillable = [

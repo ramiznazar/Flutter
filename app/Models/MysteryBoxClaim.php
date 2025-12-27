@@ -11,6 +11,10 @@ class MysteryBoxClaim extends Model
 
     protected $table = 'mystery_box_claims';
     
+    protected $primaryKey = 'id'; // Explicitly set primary key
+    public $incrementing = true; // ID is auto-incrementing
+    protected $keyType = 'int'; // ID is an integer
+    
     public $timestamps = false; // Only has created_at, not updated_at, so disable timestamps
 
     protected $fillable = [

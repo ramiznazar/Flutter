@@ -36,6 +36,9 @@ class KycViewController extends Controller
                     'back_image' => $submission->back_image,
                     'status' => $submission->status,
                     'admin_notes' => $submission->admin_notes,
+                    'didit_request_id' => $submission->didit_request_id,
+                    'didit_status' => $submission->didit_status,
+                    'didit_verified_at' => $submission->didit_verified_at,
                     'created_at' => $submission->created_at,
                 ];
             });

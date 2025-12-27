@@ -34,13 +34,34 @@ class SettingsController extends Controller
 
     public function getTotalUsers(Request $request)
     {
+        // Get actual user count from users table (real users)
+        $realUsers = \App\Models\User::count();
+        
+        // Get settings (manual/fake values from settings table)
         $settings = Setting::first();
+        
+        $displayUsers = $settings && $settings->current_users !== null 
+            ? (int) $settings->current_users 
+            : $realUsers; // Default to real users if not set
+        
+        $goalUsers = $settings && $settings->goal_users !== null 
+            ? (int) $settings->goal_users 
+            : 1000000; // Default goal
+        
+        // Calculate progress percentage
+        $progressPercent = $goalUsers > 0 
+            ? ($displayUsers / $goalUsers * 100) 
+            : 0;
+        if ($progressPercent > 100) $progressPercent = 100;
         
         return response()->json([
             'success' => true,
             'data' => [
-                'current_users' => $settings ? (int) $settings->current_users : 0,
-                'goal_users' => $settings ? (int) $settings->goal_users : 0
+                'total_users' => $displayUsers,  // Display users (fake/manual) - shown in app
+                'current_users' => $displayUsers, // Alias for compatibility
+                'real_users' => $realUsers,       // Real registered users from database
+                'goal_users' => $goalUsers,       // Goal users
+                'progress_percent' => round($progressPercent, 1) // Progress percentage
             ]
         ]);
     }

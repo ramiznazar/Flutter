@@ -11,6 +11,10 @@ class Giveaway extends Model
 
     protected $table = 'giveaway';
     
+    protected $primaryKey = 'id';
+    public $incrementing = true; // ID is auto-incrementing
+    protected $keyType = 'int'; // ID is an integer (bigint in DB but treated as int)
+    
     public $timestamps = false; // Only has created_at, not updated_at, so disable timestamps
 
     protected $fillable = [

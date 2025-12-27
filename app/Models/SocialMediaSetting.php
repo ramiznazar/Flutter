@@ -11,6 +11,10 @@ class SocialMediaSetting extends Model
 
     protected $table = 'social_media_setting';
     
+    protected $primaryKey = 'ID'; // The table uses 'ID' (uppercase) as primary key
+    public $incrementing = true; // ID is auto-incrementing
+    protected $keyType = 'int'; // ID is an integer
+    
     public $timestamps = false; // Disable timestamps for social media settings
 
     protected $fillable = [

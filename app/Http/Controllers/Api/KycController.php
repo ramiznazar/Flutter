@@ -225,6 +225,7 @@ class KycController extends Controller
     {
         // Didit API Configuration
         $apiKey = '7wk_58gFnb27uqgApuMlEcpASwUurvX8IP6cKAZc4P4';
+        $appId = 'ea69c49c-e8f0-4c64-aa9c-6a3cfa636232';
         $apiUrl = 'https://verification.didit.me/v2/id-verification/';
         
         try {
@@ -253,6 +254,10 @@ class KycController extends Controller
                     [
                         'name' => 'vendor_data',
                         'contents' => $userEmail
+                    ],
+                    [
+                        'name' => 'app_id',
+                        'contents' => $appId
                     ],
                     [
                         'name' => 'perform_document_liveness',
