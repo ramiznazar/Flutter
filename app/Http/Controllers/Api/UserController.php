@@ -56,7 +56,6 @@ class UserController extends Controller
             'country' => 'required|string',
             'phone_number' => 'required|string',
             'profile_url' => 'required|string',
-            'password' => 'required|string',
         ]);
 
         if ($validator->fails()) {
@@ -89,14 +88,6 @@ class UserController extends Controller
                 'success' => false,
                 'message' => 'User not found'
             ], 404);
-        }
-
-        // Check password
-        if ($request->password !== $user->password) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Incorrect password.'
-            ], 400);
         }
 
         // Check if new email is different and already exists
@@ -135,7 +126,6 @@ class UserController extends Controller
         // Implementation similar to updateProfile but for profile picture only
         $validator = Validator::make($request->all(), [
             'email' => 'required|email',
-            'password' => 'required|string',
             'profile_url' => 'required|string',
         ]);
 
@@ -147,15 +137,14 @@ class UserController extends Controller
         }
 
         $user = User::where('email', $request->email)
-            ->where('password', $request->password)
             ->where('account_status', 'active')
             ->first();
 
         if (!$user) {
             return response()->json([
                 'success' => false,
-                'message' => 'Invalid credentials'
-            ], 401);
+                'message' => 'User not found or account not active'
+            ], 404);
         }
 
         $user->update(['ban_reason' => $request->profile_url]);
@@ -281,26 +270,24 @@ class UserController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'email' => 'required|email',
-            'password' => 'required|string',
         ]);
 
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Email and password are required'
+                'message' => 'Email is required'
             ], 400);
         }
 
         $user = User::where('email', $request->email)
-            ->where('password', $request->password)
             ->where('account_status', 'active')
             ->first();
 
         if (!$user) {
             return response()->json([
                 'success' => false,
-                'message' => 'Invalid credentials'
-            ], 401);
+                'message' => 'User not found or account not active'
+            ], 404);
         }
 
         // Update user guide based on request data
@@ -320,26 +307,24 @@ class UserController extends Controller
         // Update user's last active time
         $validator = Validator::make($request->all(), [
             'email' => 'required|email',
-            'password' => 'required|string',
         ]);
 
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Email and password are required'
+                'message' => 'Email is required'
             ], 400);
         }
 
         $user = User::where('email', $request->email)
-            ->where('password', $request->password)
             ->where('account_status', 'active')
             ->first();
 
         if (!$user) {
             return response()->json([
                 'success' => false,
-                'message' => 'Invalid credentials'
-            ], 401);
+                'message' => 'User not found or account not active'
+            ], 404);
         }
 
         $user->update(['last_active' => now()->format('Y-m-d H:i:s')]);
@@ -354,7 +339,6 @@ class UserController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'email' => 'required|email',
-            'password' => 'required|string',
             'username' => 'required|string',
         ]);
 
@@ -366,15 +350,14 @@ class UserController extends Controller
         }
 
         $user = User::where('email', $request->email)
-            ->where('password', $request->password)
             ->where('account_status', 'active')
             ->first();
 
         if (!$user) {
             return response()->json([
                 'success' => false,
-                'message' => 'Invalid credentials'
-            ], 401);
+                'message' => 'User not found or account not active'
+            ], 404);
         }
 
         // Check if username already exists
@@ -404,8 +387,8 @@ class UserController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'email' => 'required|email',
-            'password' => 'required|string',
-            'invite_code' => 'required|string',
+            'username' => 'required_if:reason,invite|string',
+            'reason' => 'required|in:invite,skip',
         ]);
 
         if ($validator->fails()) {
@@ -416,72 +399,95 @@ class UserController extends Controller
         }
 
         $user = User::where('email', $request->email)
-            ->where('password', $request->password)
             ->where('account_status', 'active')
+            ->where('invite_setup', 'not_setup') // Only allow if not already set up
             ->first();
 
         if (!$user) {
             return response()->json([
                 'success' => false,
-                'message' => 'Invalid credentials'
-            ], 401);
-        }
-
-        // Find referrer by invite code (could be user ID or username)
-        $referrer = User::where('id', $request->invite_code)
-            ->orWhere('username', $request->invite_code)
-            ->first();
-
-        if (!$referrer) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Invalid invite code'
+                'message' => 'Email or password is incorrect or account is not active or invite is not eligible for you.'
             ], 400);
         }
 
-        if ($referrer->id === $user->id) {
+        if ($request->reason === 'skip') {
+            // Update invite_setup to 'skip'
+            $user->update(['invite_setup' => 'skip']);
+
             return response()->json([
-                'success' => false,
-                'message' => 'Cannot use your own invite code'
-            ], 400);
+                'success' => true,
+                'message' => 'Username successfully setup.'
+            ]);
         }
 
-        // Update user's invite setup
-        $user->update(['invite_setup' => $request->invite_code]);
+        // Handle 'invite' reason
+        if ($request->reason === 'invite') {
+            if (empty($request->username)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Username is required when reason is invite'
+                ], 400);
+            }
 
-        // Increment referrer's total_invite
-        $referrer->increment('total_invite');
+            // Find referrer by username
+            $referrer = User::where('username', $request->username)->first();
+
+            if (!$referrer) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Username not found.'
+                ], 400);
+            }
+
+            // Check if user is trying to use their own referral code
+            if ($referrer->id === $user->id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'You cannot use your own referral code.'
+                ], 400);
+            }
+
+            // Update user's invite setup with referrer's user_id
+            $user->update(['invite_setup' => $referrer->id]);
+
+            // Increment referrer's total_invite and add reward
+            $referrer->increment('total_invite');
+            $referrer->increment('token', 0.5);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Username successfully setup.'
+            ]);
+        }
 
         return response()->json([
-            'success' => true,
-            'message' => 'Invite code set successfully'
-        ]);
+            'success' => false,
+            'message' => 'Invalid reason'
+        ], 400);
     }
 
     public function deleteAccountRequest(Request $request)
     {
         $validator = Validator::make($request->all(), [
             'email' => 'required|email',
-            'password' => 'required|string',
         ]);
 
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Email and password are required'
+                'message' => 'Email is required'
             ], 400);
         }
 
         $user = User::where('email', $request->email)
-            ->where('password', $request->password)
             ->where('account_status', 'active')
             ->first();
 
         if (!$user) {
             return response()->json([
                 'success' => false,
-                'message' => 'Invalid credentials'
-            ], 401);
+                'message' => 'User not found or account not active'
+            ], 404);
         }
 
         // Mark account for deletion (set status to pending_deletion or similar)

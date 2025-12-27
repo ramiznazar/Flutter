@@ -108,7 +108,6 @@ class NewsController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'email' => 'required|email',
-            'password' => 'required|string',
             'news_id' => 'required|integer',
         ]);
 
@@ -120,15 +119,14 @@ class NewsController extends Controller
         }
 
         $user = User::where('email', $request->email)
-            ->where('password', $request->password)
             ->where('account_status', 'active')
             ->first();
 
         if (!$user) {
             return response()->json([
                 'success' => false,
-                'message' => 'Invalid credentials'
-            ], 401);
+                'message' => 'User not found or account not active'
+            ], 404);
         }
 
         $news = News::find($request->news_id);

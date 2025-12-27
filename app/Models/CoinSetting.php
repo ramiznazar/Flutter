@@ -11,6 +11,10 @@ class CoinSetting extends Model
 
     protected $table = 'coin_settings';
     
+    protected $primaryKey = 'id';
+    public $incrementing = true;
+    protected $keyType = 'int';
+    
     public $timestamps = false; // Disable timestamps for settings
 
     protected $fillable = [

@@ -16,26 +16,24 @@ class KycController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'email' => 'required|email',
-            'password' => 'required|string',
         ]);
 
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Missing required fields'
+                'message' => 'Email is required'
             ], 400);
         }
 
         $user = User::where('email', $request->email)
-            ->where('password', $request->password)
             ->where('account_status', 'active')
             ->first();
 
         if (!$user) {
             return response()->json([
                 'success' => false,
-                'message' => 'Invalid credentials or account not active'
-            ], 401);
+                'message' => 'User not found or account not active'
+            ], 404);
         }
 
         // Get KYC requirements from settings
@@ -80,7 +78,6 @@ class KycController extends Controller
         // KYC submission with Didit verification
         $validator = Validator::make($request->all(), [
             'email' => 'required|email',
-            'password' => 'required|string',
             'full_name' => 'required|string',
             'dob' => 'required|date|date_format:Y-m-d',
             'front_image' => 'required|string', // Base64 encoded
@@ -95,15 +92,14 @@ class KycController extends Controller
         }
 
         $user = User::where('email', $request->email)
-            ->where('password', $request->password)
             ->where('account_status', 'active')
             ->first();
 
         if (!$user) {
             return response()->json([
                 'success' => false,
-                'message' => 'Invalid credentials'
-            ], 401);
+                'message' => 'User not found or account not active'
+            ], 404);
         }
 
         // Check eligibility first
@@ -305,26 +301,24 @@ class KycController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'email' => 'required|email',
-            'password' => 'required|string',
         ]);
 
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Missing required fields'
+                'message' => 'Email is required'
             ], 400);
         }
 
         $user = User::where('email', $request->email)
-            ->where('password', $request->password)
             ->where('account_status', 'active')
             ->first();
 
         if (!$user) {
             return response()->json([
                 'success' => false,
-                'message' => 'Invalid credentials'
-            ], 401);
+                'message' => 'User not found or account not active'
+            ], 404);
         }
 
         $kyc = KycSubmission::where('user_id', $user->id)

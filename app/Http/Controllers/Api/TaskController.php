@@ -18,7 +18,6 @@ class TaskController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'email' => 'required|email',
-            'password' => 'required|string',
             'task_id' => 'required|integer',
             'task_type' => 'required|in:daily,onetime',
         ]);
@@ -32,15 +31,14 @@ class TaskController extends Controller
 
         // Validate user
         $user = User::where('email', $request->email)
-            ->where('password', $request->password)
             ->where('account_status', 'active')
             ->first();
 
         if (!$user) {
             return response()->json([
                 'success' => false,
-                'message' => 'Invalid credentials or account not active'
-            ], 401);
+                'message' => 'User not found or account not active'
+            ], 404);
         }
 
         // Check if task exists
@@ -134,7 +132,6 @@ class TaskController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'email' => 'required|email',
-            'password' => 'required|string',
             'task_id' => 'required|integer',
             'task_type' => 'required|in:daily,onetime',
         ]);
@@ -148,15 +145,14 @@ class TaskController extends Controller
 
         // Validate user
         $user = User::where('email', $request->email)
-            ->where('password', $request->password)
             ->where('account_status', 'active')
             ->first();
 
         if (!$user) {
             return response()->json([
                 'success' => false,
-                'message' => 'Invalid credentials or account not active'
-            ], 401);
+                'message' => 'User not found or account not active'
+            ], 404);
         }
 
         // Get task reward

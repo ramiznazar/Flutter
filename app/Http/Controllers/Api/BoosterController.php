@@ -15,26 +15,24 @@ class BoosterController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'email' => 'required|email',
-            'password' => 'required|string',
         ]);
 
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Missing required fields'
+                'message' => 'Email is required'
             ], 400);
         }
 
         $user = User::where('email', $request->email)
-            ->where('password', $request->password)
             ->where('account_status', 'active')
             ->first();
 
         if (!$user) {
             return response()->json([
                 'success' => false,
-                'message' => 'Invalid credentials or account not active'
-            ], 401);
+                'message' => 'User not found or account not active'
+            ], 404);
         }
 
         // Get active booster
@@ -74,26 +72,24 @@ class BoosterController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'email' => 'required|email',
-            'password' => 'required|string',
         ]);
 
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Missing required fields'
+                'message' => 'Email is required'
             ], 400);
         }
 
         $user = User::where('email', $request->email)
-            ->where('password', $request->password)
             ->where('account_status', 'active')
             ->first();
 
         if (!$user) {
             return response()->json([
                 'success' => false,
-                'message' => 'Invalid credentials or account not active'
-            ], 401);
+                'message' => 'User not found or account not active'
+            ], 404);
         }
 
         // Check for active booster

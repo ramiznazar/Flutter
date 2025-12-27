@@ -72,28 +72,29 @@ class MiningController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'email' => 'required|email',
-            'password' => 'required|string',
-            'coins' => 'required|integer|min:0',
+            'coins' => 'required|numeric|min:0',
             'reason' => 'sometimes|string',
         ]);
 
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Missing required fields'
+                'message' => $validator->errors()->first() ?? 'Missing required fields'
             ], 400);
         }
+        
+        // Convert coins to integer
+        $request->merge(['coins' => (int) $request->coins]);
 
         $user = User::where('email', $request->email)
-            ->where('password', $request->password)
             ->where('account_status', 'active')
             ->first();
 
         if (!$user) {
             return response()->json([
                 'success' => false,
-                'message' => 'Invalid account'
-            ], 401);
+                'message' => 'User not found or account not active'
+            ], 404);
         }
 
         $this->checkRecord($user->id);
@@ -249,7 +250,6 @@ class MiningController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'email' => 'required|email',
-            'password' => 'required|string',
             'reason' => 'required|in:get,start',
         ]);
 
@@ -260,15 +260,13 @@ class MiningController extends Controller
             ], 400);
         }
 
-        $user = User::where('email', $request->email)
-            ->where('password', $request->password)
-            ->first();
+        $user = User::where('email', $request->email)->first();
 
         if (!$user) {
             return response()->json([
                 'success' => false,
-                'message' => 'Invalid email or password'
-            ], 401);
+                'message' => 'User not found'
+            ], 404);
         }
 
         $coinSettings = CoinSetting::first();
@@ -357,7 +355,6 @@ class MiningController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'email' => 'required|email',
-            'password' => 'required|string',
             'ID' => 'required|integer',
         ]);
 
@@ -368,15 +365,13 @@ class MiningController extends Controller
             ], 400);
         }
 
-        $user = User::where('email', $request->email)
-            ->where('password', $request->password)
-            ->first();
+        $user = User::where('email', $request->email)->first();
 
         if (!$user) {
             return response()->json([
                 'success' => false,
-                'message' => 'Invalid credentials'
-            ], 401);
+                'message' => 'User not found'
+            ], 404);
         }
 
         // Check if already claimed
@@ -431,25 +426,22 @@ class MiningController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'email' => 'required|email',
-            'password' => 'required|string',
         ]);
 
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Missing required fields'
+                'message' => 'Email is required'
             ], 400);
         }
 
-        $user = User::where('email', $request->email)
-            ->where('password', $request->password)
-            ->first();
+        $user = User::where('email', $request->email)->first();
 
         if (!$user) {
             return response()->json([
                 'success' => false,
-                'message' => 'Invalid credentials.'
-            ], 401);
+                'message' => 'User not found'
+            ], 404);
         }
 
         $socialMediaList = \App\Models\SocialMediaSetting::leftJoin('social_media_tokens', function($join) use ($user) {

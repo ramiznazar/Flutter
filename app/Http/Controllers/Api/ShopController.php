@@ -85,7 +85,6 @@ class ShopController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'email' => 'required|email',
-            'password' => 'required|string',
             'shop_id' => 'required|integer',
         ]);
 
@@ -97,15 +96,14 @@ class ShopController extends Controller
         }
 
         $user = User::where('email', $request->email)
-            ->where('password', $request->password)
             ->where('account_status', 'active')
             ->first();
 
         if (!$user) {
             return response()->json([
                 'success' => false,
-                'message' => 'Invalid credentials'
-            ], 401);
+                'message' => 'User not found or account not active'
+            ], 404);
         }
 
         $shop = Shop::find($request->shop_id);

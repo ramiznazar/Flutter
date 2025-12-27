@@ -11,6 +11,10 @@ class AdsSetting extends Model
 
     protected $table = 'ads_setting';
     
+    protected $primaryKey = 'id';
+    public $incrementing = true;
+    protected $keyType = 'int';
+    
     public $timestamps = false; // Disable timestamps for ads settings
 
     protected $fillable = [
