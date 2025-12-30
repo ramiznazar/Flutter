@@ -150,15 +150,17 @@ class UsersManageController extends Controller
 
         // Calculate expiry time
         $durationSeconds = (int) ($durationHours * 3600);
-        $expiresAt = Carbon::now()->addSeconds($durationSeconds);
+        $now = Carbon::now();
+        $expiresAt = $now->copy()->addSeconds($durationSeconds);
 
         // Create new booster
         $booster = UserBooster::create([
             'user_id' => $user->id,
             'booster_type' => $boosterType,
-            'started_at' => Carbon::now(),
+            'started_at' => $now,
             'expires_at' => $expiresAt,
-            'is_active' => 1
+            'is_active' => 1,
+            'created_at' => $now
         ]);
 
         return response()->json([

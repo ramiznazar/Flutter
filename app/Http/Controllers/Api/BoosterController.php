@@ -127,6 +127,7 @@ class BoosterController extends Controller
             'started_at' => $now,
             'expires_at' => $expiresAt,
             'is_active' => 1,
+            'created_at' => $now
         ]);
 
         return response()->json([

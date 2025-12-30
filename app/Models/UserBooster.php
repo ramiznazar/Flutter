@@ -14,7 +14,7 @@ class UserBooster extends Model
     public $timestamps = false; // Only has created_at, not updated_at, so disable timestamps
 
     protected $fillable = [
-        'user_id', 'booster_type', 'started_at', 'expires_at', 'is_active'
+        'user_id', 'booster_type', 'started_at', 'expires_at', 'is_active', 'created_at'
     ];
 
     protected $casts = [

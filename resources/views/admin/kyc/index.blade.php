@@ -67,6 +67,76 @@
                     </table>
                 </div>
 
+                @if(isset($total) && $total > $perPage)
+                <div class="mt-3">
+                    <nav aria-label="Page navigation">
+                        <ul class="pagination justify-content-center">
+                            @php
+                                $totalPages = ceil($total / $perPage);
+                                $currentPage = $page;
+                                $showPages = 5; // Number of page numbers to show around current page
+                                
+                                // Calculate start and end page numbers
+                                $startPage = max(1, $currentPage - floor($showPages / 2));
+                                $endPage = min($totalPages, $startPage + $showPages - 1);
+                                
+                                // Adjust start if we're near the end
+                                if ($endPage - $startPage < $showPages - 1) {
+                                    $startPage = max(1, $endPage - $showPages + 1);
+                                }
+                            @endphp
+
+                            {{-- Previous Button --}}
+                            <li class="page-item {{ $currentPage == 1 ? 'disabled' : '' }}">
+                                <a class="page-link" href="{{ route('admin.kyc.index', ['page' => $currentPage - 1, 'edit_id' => request('edit_id')]) }}" aria-label="Previous">
+                                    <span aria-hidden="true">&laquo;</span>
+                                    <span class="sr-only">Previous</span>
+                                </a>
+                            </li>
+
+                            {{-- First Page --}}
+                            @if($startPage > 1)
+                                <li class="page-item">
+                                    <a class="page-link" href="{{ route('admin.kyc.index', ['page' => 1, 'edit_id' => request('edit_id')]) }}">1</a>
+                                </li>
+                                @if($startPage > 2)
+                                    <li class="page-item disabled">
+                                        <span class="page-link">...</span>
+                                    </li>
+                                @endif
+                            @endif
+
+                            {{-- Page Numbers --}}
+                            @for($i = $startPage; $i <= $endPage; $i++)
+                                <li class="page-item {{ $i == $currentPage ? 'active' : '' }}">
+                                    <a class="page-link" href="{{ route('admin.kyc.index', ['page' => $i, 'edit_id' => request('edit_id')]) }}">{{ $i }}</a>
+                                </li>
+                            @endfor
+
+                            {{-- Last Page --}}
+                            @if($endPage < $totalPages)
+                                @if($endPage < $totalPages - 1)
+                                    <li class="page-item disabled">
+                                        <span class="page-link">...</span>
+                                    </li>
+                                @endif
+                                <li class="page-item">
+                                    <a class="page-link" href="{{ route('admin.kyc.index', ['page' => $totalPages, 'edit_id' => request('edit_id')]) }}">{{ $totalPages }}</a>
+                                </li>
+                            @endif
+
+                            {{-- Next Button --}}
+                            <li class="page-item {{ $currentPage == $totalPages ? 'disabled' : '' }}">
+                                <a class="page-link" href="{{ route('admin.kyc.index', ['page' => $currentPage + 1, 'edit_id' => request('edit_id')]) }}" aria-label="Next">
+                                    <span aria-hidden="true">&raquo;</span>
+                                    <span class="sr-only">Next</span>
+                                </a>
+                            </li>
+                        </ul>
+                    </nav>
+                </div>
+                @endif
+
             </div>
         </div>
     </div>

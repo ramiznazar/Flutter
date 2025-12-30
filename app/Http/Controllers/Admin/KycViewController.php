@@ -22,8 +22,16 @@ class KycViewController extends Controller
             $editKYC = KycSubmission::with('user')->find($editId);
         }
 
-        $kycSubmissions = KycSubmission::with('user')
-            ->orderBy('created_at', 'desc')
+        $page = $request->get('page', 1);
+        $perPage = 20;
+        $offset = ($page - 1) * $perPage;
+
+        $query = KycSubmission::with('user');
+
+        $total = $query->count();
+        $kycSubmissions = $query->orderBy('created_at', 'desc')
+            ->offset($offset)
+            ->limit($perPage)
             ->get()
             ->map(function($submission) {
                 return [
@@ -43,7 +51,7 @@ class KycViewController extends Controller
                 ];
             });
 
-        return view('admin.kyc.index', compact('kycSubmissions', 'editKYC'));
+        return view('admin.kyc.index', compact('kycSubmissions', 'editKYC', 'page', 'perPage', 'total'));
     }
 
     public function updateStatus(Request $request)

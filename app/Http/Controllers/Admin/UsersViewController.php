@@ -147,12 +147,14 @@ class UsersViewController extends Controller
         $expiresAt = Carbon::now()->addSeconds($durationSeconds);
 
         // Create new booster
+        $now = Carbon::now();
         UserBooster::create([
             'user_id' => $user->id,
             'booster_type' => $boosterType,
-            'started_at' => Carbon::now(),
+            'started_at' => $now,
             'expires_at' => $expiresAt,
-            'is_active' => 1
+            'is_active' => 1,
+            'created_at' => $now
         ]);
 
         return back()->with('message', "Booster ($boosterType) assigned successfully. Expires at: " . $expiresAt->format('Y-m-d H:i:s'))
