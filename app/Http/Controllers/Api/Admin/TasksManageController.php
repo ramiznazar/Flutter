@@ -19,12 +19,12 @@ class TasksManageController extends Controller
 
         if ($type === 'daily') {
             // Get first 3 tasks as daily tasks
-            $tasks = SocialMediaSetting::orderBy('id', 'asc')
+            $tasks = SocialMediaSetting::orderBy('ID', 'asc')
                 ->limit(3)
                 ->get()
                 ->map(function($task) {
                     return [
-                        'id' => $task->id,
+                        'id' => $task->ID,  // Use uppercase ID
                         'name' => $task->Name,
                         'reward' => $task->Token,
                         'redirect_link' => $task->Link,
@@ -43,13 +43,13 @@ class TasksManageController extends Controller
         } elseif ($type === 'onetime') {
             // Get tasks after first 3 as one-time tasks
             // Get IDs of first 3 tasks to exclude them
-            $dailyTaskIds = SocialMediaSetting::orderBy('id', 'asc')->limit(3)->pluck('id')->toArray();
-            $tasks = SocialMediaSetting::orderBy('id', 'desc')
-                ->whereNotIn('id', $dailyTaskIds)
+            $dailyTaskIds = SocialMediaSetting::orderBy('ID', 'asc')->limit(3)->pluck('ID')->toArray();
+            $tasks = SocialMediaSetting::orderBy('ID', 'desc')
+                ->whereNotIn('ID', $dailyTaskIds)
                 ->get()
                 ->map(function($task) {
                     return [
-                        'id' => $task->id,
+                        'id' => $task->ID,  // Use uppercase ID
                         'name' => $task->Name,
                         'reward' => $task->Token,
                         'redirect_link' => $task->Link,
@@ -64,10 +64,28 @@ class TasksManageController extends Controller
             ]);
         } else {
             // Get all tasks
-            $allTasks = SocialMediaSetting::orderBy('id', 'asc')->get();
+            $allTasks = SocialMediaSetting::orderBy('ID', 'asc')->get();
             
-            $dailyTasks = $allTasks->take(3)->values();
-            $onetimeTasks = $allTasks->skip(3)->values();
+            $dailyTasks = $allTasks->take(3)->map(function($task) {
+                return [
+                    'id' => $task->ID,
+                    'name' => $task->Name,
+                    'reward' => $task->Token,
+                    'redirect_link' => $task->Link,
+                    'icon' => $task->Icon
+                ];
+            })->values();
+            
+            $onetimeTasks = $allTasks->skip(3)->map(function($task) {
+                return [
+                    'id' => $task->ID,
+                    'name' => $task->Name,
+                    'reward' => $task->Token,
+                    'redirect_link' => $task->Link,
+                    'icon' => $task->Icon,
+                    'status' => 'active'
+                ];
+            })->values();
 
             return response()->json([
                 'success' => true,
@@ -115,7 +133,7 @@ class TasksManageController extends Controller
 
             try {
                 // Delete existing first 3 tasks
-                SocialMediaSetting::orderBy('id', 'asc')->limit(3)->delete();
+                SocialMediaSetting::orderBy('ID', 'asc')->limit(3)->delete();
 
                 // Create new daily tasks
                 $tasks = [
@@ -253,7 +271,7 @@ class TasksManageController extends Controller
         }
 
         // Check if it's a daily task (first 3)
-        $dailyTaskIds = SocialMediaSetting::orderBy('id', 'asc')->limit(3)->pluck('id')->toArray();
+        $dailyTaskIds = SocialMediaSetting::orderBy('ID', 'asc')->limit(3)->pluck('ID')->toArray();
         
         if (in_array($id, $dailyTaskIds)) {
             // For daily tasks, we might want to prevent certain updates

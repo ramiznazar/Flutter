@@ -42,13 +42,27 @@ class TaskController extends Controller
         }
 
         // Check if task exists
-        $task = SocialMediaSetting::find($request->task_id);
+        $task = SocialMediaSetting::where('ID', $request->task_id)->first();
 
         if (!$task) {
+            // Get available task IDs for better error message
+            $availableTasks = SocialMediaSetting::orderBy('ID', 'asc')
+                ->limit(10)
+                ->pluck('ID')
+                ->toArray();
+            
             return response()->json([
                 'success' => false,
-                'message' => 'Task not found'
+                'message' => 'Task not found. Available task IDs: ' . implode(', ', $availableTasks)
             ], 404);
+        }
+
+        // Check if task is active (if Status column exists)
+        if (isset($task->Status) && $task->Status == 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Task is not active'
+            ], 400);
         }
 
         // Check if user already has an active completion for this task
@@ -156,13 +170,27 @@ class TaskController extends Controller
         }
 
         // Get task reward
-        $task = SocialMediaSetting::find($request->task_id);
+        $task = SocialMediaSetting::where('ID', $request->task_id)->first();
 
         if (!$task) {
+            // Get available task IDs for better error message
+            $availableTasks = SocialMediaSetting::orderBy('ID', 'asc')
+                ->limit(10)
+                ->pluck('ID')
+                ->toArray();
+            
             return response()->json([
                 'success' => false,
-                'message' => 'Task not found'
+                'message' => 'Task not found. Available task IDs: ' . implode(', ', $availableTasks)
             ], 404);
+        }
+
+        // Check if task is active (if Status column exists)
+        if (isset($task->Status) && $task->Status == 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Task is not active'
+            ], 400);
         }
 
         $reward = (float) $task->Token;
@@ -251,12 +279,18 @@ class TaskController extends Controller
             ], 404);
         }
 
-        $task = SocialMediaSetting::find($request->task_id);
+        $task = SocialMediaSetting::where('ID', $request->task_id)->first();
 
         if (!$task) {
+            // Get available task IDs for better error message
+            $availableTasks = SocialMediaSetting::orderBy('ID', 'asc')
+                ->limit(10)
+                ->pluck('ID')
+                ->toArray();
+            
             return response()->json([
                 'success' => false,
-                'message' => 'Task not found'
+                'message' => 'Task not found. Available task IDs: ' . implode(', ', $availableTasks)
             ], 404);
         }
 
