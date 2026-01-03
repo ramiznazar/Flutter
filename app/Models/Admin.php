@@ -15,7 +15,7 @@ class Admin extends Authenticatable
     public $timestamps = true; // Enable timestamps for admin
 
     protected $fillable = [
-        'username', 'email', 'password', 'name', 'last_login'
+        'username', 'email', 'password', 'name', 'last_login', 'remember_token'
     ];
 
     protected $hidden = [
