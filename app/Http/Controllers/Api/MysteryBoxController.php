@@ -250,4 +250,111 @@ class MysteryBoxController extends Controller
             ], 500);
         }
     }
+
+    public function getDetails(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'email' => 'required|email',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Email is required'
+            ], 400);
+        }
+
+        $user = User::where('email', $request->email)->first();
+
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'User not found'
+            ], 404);
+        }
+
+        $settings = Setting::first();
+        if (!$settings) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Settings not found'
+            ], 404);
+        }
+
+        $boxTypes = ['common', 'rare', 'epic', 'legendary'];
+        $now = Carbon::now();
+        $mysteryBoxData = [];
+
+        foreach ($boxTypes as $boxType) {
+            // Get active (not opened) claim
+            $activeClaim = MysteryBoxClaim::where('user_id', $user->id)
+                ->where('box_type', $boxType)
+                ->where('box_opened', 0)
+                ->orderBy('created_at', 'desc')
+                ->first();
+
+            // Get all opened boxes count
+            $openedCount = MysteryBoxClaim::where('user_id', $user->id)
+                ->where('box_type', $boxType)
+                ->where('box_opened', 1)
+                ->count();
+
+            // Get total reward from opened boxes
+            $totalReward = MysteryBoxClaim::where('user_id', $user->id)
+                ->where('box_type', $boxType)
+                ->where('box_opened', 1)
+                ->sum('reward_coins');
+
+            $cooldownMinutes = (int) $settings->{"{$boxType}_box_cooldown"};
+            $adsRequired = (int) $settings->{"{$boxType}_box_ads"};
+            $minCoins = (float) ($settings->{"{$boxType}_box_min_coins"} ?? 1.00);
+            $maxCoins = (float) ($settings->{"{$boxType}_box_max_coins"} ?? 5.00);
+
+            $boxData = [
+                'box_type' => $boxType,
+                'settings' => [
+                    'cooldown_minutes' => $cooldownMinutes,
+                    'ads_required' => $adsRequired,
+                    'min_coins' => $minCoins,
+                    'max_coins' => $maxCoins,
+                ],
+                'statistics' => [
+                    'total_opened' => $openedCount,
+                    'total_reward_earned' => (float) $totalReward,
+                ],
+            ];
+
+            if ($activeClaim) {
+                $secondsRemaining = 0;
+                $isOnCooldown = false;
+                if ($activeClaim->cooldown_until && $now < Carbon::parse($activeClaim->cooldown_until)) {
+                    $secondsRemaining = $now->diffInSeconds(Carbon::parse($activeClaim->cooldown_until));
+                    $isOnCooldown = true;
+                }
+
+                $boxData['active_box'] = [
+                    'clicks' => $activeClaim->clicks ?? 0,
+                    'ads_watched' => $activeClaim->ads_watched,
+                    'ads_required' => $activeClaim->ads_required,
+                    'can_open' => $activeClaim->ads_watched >= $activeClaim->ads_required,
+                    'is_on_cooldown' => $isOnCooldown,
+                    'seconds_remaining' => $secondsRemaining,
+                    'cooldown_until' => $activeClaim->cooldown_until,
+                    'last_clicked_at' => $activeClaim->last_clicked_at,
+                    'last_ad_watched_at' => $activeClaim->last_ad_watched_at,
+                ];
+            } else {
+                $boxData['active_box'] = null;
+            }
+
+            $mysteryBoxData[] = $boxData;
+        }
+
+        return response()->json([
+            'success' => true,
+            'user_email' => $user->email,
+            'user_id' => $user->id,
+            'mystery_boxes' => $mysteryBoxData
+        ]);
+    }
 }

@@ -82,6 +82,7 @@ Route::post('/booster_claim', [BoosterController::class, 'boosterClaim']);
 Route::post('/mystery_box_watch_ad', [MysteryBoxController::class, 'watchAd']);
 Route::post('/mystery_box_click', [MysteryBoxController::class, 'click']);
 Route::post('/mystery_box_open', [MysteryBoxController::class, 'open']);
+Route::post('/mystery_box_details', [MysteryBoxController::class, 'getDetails']);
 
 // KYC Routes
 Route::post('/kyc_check_eligibility', [KycController::class, 'checkEligibility']);

@@ -74,6 +74,7 @@ class MiningController extends Controller
             'email' => 'required|email',
             'coins' => 'required|numeric|min:0',
             'reason' => 'sometimes|string',
+            'balance' => 'sometimes|numeric|min:0', // ✅ Accept frontend-calculated balance
         ]);
 
         if ($validator->fails()) {
@@ -85,6 +86,11 @@ class MiningController extends Controller
         
         // Convert coins to integer
         $request->merge(['coins' => (int) $request->coins]);
+        
+        // Get frontend balance if provided
+        $frontendBalance = $request->has('balance') && $request->balance !== null 
+            ? (float) $request->balance 
+            : null;
 
         $user = User::where('email', $request->email)
             ->where('account_status', 'active')
@@ -126,19 +132,61 @@ class MiningController extends Controller
 
             if ($now->gt($miningEndTime)) {
                 // Mining finished, calculate and add tokens
-                $coins = (int) $user->coin;
-                $miningTime = $timeLimitInSec;
+                // Use the actual mining_time stored in database, not timeLimitInSec
+                $actualMiningTime = (int) ($user->mining_time ?? $timeLimitInSec);
                 $token = (float) $user->token;
-                $token += $addToken * $miningTime;
+                $token += $addToken * $actualMiningTime;
 
                 $user->update([
                     'token' => $token,
-                    'is_mining' => 0
+                    'is_mining' => 0,
+                    'mining_end_time' => null,
+                    'mining_time' => 0
                 ]);
 
                 $this->increaseUserMiningLevel($user->id);
+                
+                // Return updated status after completion
+                return response()->json([
+                    'success' => true,
+                    'message' => 'idle',
+                    'server_time' => $currentTime,
+                    'mining_end_time' => '',
+                    'total_team' => (string) $user->total_invite,
+                    'coin' => $user->coin,
+                    'balance' => (string) $user->fresh()->token, // Get updated token
+                    'token_per_sec' => $addToken,
+                    'usdt' => $usdt,
+                    'total_mining_time_in_sec' => $timeLimitInSec
+                ]);
             } else {
-                // Still mining
+                // Still mining - calculate elapsed time for progress
+                $elapsedSeconds = $now->diffInSeconds($miningEndTime);
+                $totalMiningSeconds = (int) ($user->mining_time ?? $timeLimitInSec);
+                $elapsedMiningSeconds = $totalMiningSeconds - $elapsedSeconds;
+                
+                // Get starting balance (stored when mining started)
+                $startingBalance = (float) $user->token;
+                
+                // ✅ If frontend balance is provided (when reason == "get"), use it
+                if ($request->reason === 'get' && $frontendBalance !== null && $frontendBalance >= 0) {
+                    // Validate balance is reasonable (not more than 10x starting balance)
+                    $maxExpectedBalance = $startingBalance + ($addToken * $totalMiningSeconds * 10);
+                    if ($frontendBalance <= $maxExpectedBalance) {
+                        // Accept and store frontend-calculated balance
+                        $user->update(['token' => $frontendBalance]);
+                        $currentBalance = $frontendBalance;
+                    } else {
+                        // Balance seems unreasonable, use server calculation
+                        $tokensEarned = $addToken * $elapsedMiningSeconds;
+                        $currentBalance = $startingBalance + $tokensEarned;
+                    }
+                } else {
+                    // Fallback to server calculation (backward compatibility)
+                    $tokensEarned = $addToken * $elapsedMiningSeconds;
+                    $currentBalance = $startingBalance + $tokensEarned;
+                }
+                
                 return response()->json([
                     'success' => true,
                     'message' => 'in_progress',
@@ -146,16 +194,38 @@ class MiningController extends Controller
                     'mining_end_time' => $user->mining_end_time ?? '',
                     'total_team' => (string) $user->total_invite,
                     'coin' => $user->coin,
-                    'balance' => $user->token,
+                    'balance' => (string) $currentBalance, // ✅ Use frontend balance or calculated
+                    'starting_balance' => (string) $startingBalance, // Balance when mining started
                     'token_per_sec' => $addToken,
                     'usdt' => $usdt,
-                    'total_mining_time_in_sec' => $timeLimitInSec
+                    'total_mining_time_in_sec' => $totalMiningSeconds,
+                    'seconds_remaining' => $elapsedSeconds,
+                    'elapsed_seconds' => $elapsedMiningSeconds
                 ]);
             }
         }
 
         // Handle "get" reason
         if ($request->reason === 'get') {
+            // ✅ If frontend balance is provided, accept and store it
+            if ($frontendBalance !== null && $frontendBalance >= 0) {
+                // Validate balance is reasonable
+                $currentToken = (float) $user->token;
+                $maxExpectedBalance = $currentToken * 10; // Allow up to 10x current balance
+                
+                if ($frontendBalance <= $maxExpectedBalance) {
+                    // Accept and store frontend-calculated balance
+                    $user->update(['token' => $frontendBalance]);
+                    $balance = $frontendBalance;
+                } else {
+                    // Balance seems unreasonable, use current token
+                    $balance = $currentToken;
+                }
+            } else {
+                // No frontend balance provided, use current token (backward compatibility)
+                $balance = (float) $user->token;
+            }
+            
             return response()->json([
                 'success' => true,
                 'message' => 'idle',
@@ -163,7 +233,7 @@ class MiningController extends Controller
                 'mining_end_time' => $user->mining_end_time ?? '',
                 'total_team' => (string) $user->total_invite,
                 'coin' => $user->coin,
-                'balance' => (string) $user->token,
+                'balance' => (string) $balance, // ✅ Use frontend balance or current token
                 'token_per_sec' => $addToken,
                 'usdt' => $usdt,
                 'total_mining_time_in_sec' => $timeLimitInSec
@@ -195,6 +265,12 @@ class MiningController extends Controller
         $newCoins = $coins - $coinsRequired;
         $totalTime = $totalTime + $timeLimitInSec;
         $miningEndTime = Carbon::now()->addSeconds($totalTime)->format('Y-m-d-H:i:s');
+        
+        // ✅ Get current balance (this will be the starting balance for this mining session)
+        // The token field stores the current balance, which becomes the starting balance
+        $startingBalance = (float) $user->token;
+        // Note: We don't overwrite token here - it already contains the current balance
+        // The token field will be updated by frontend during mining, or calculated server-side
 
         DB::beginTransaction();
 
@@ -204,6 +280,7 @@ class MiningController extends Controller
                 'is_mining' => 1,
                 'mining_end_time' => $miningEndTime,
                 'mining_time' => $totalTime
+                // ✅ token field keeps current balance (which is the starting balance for this session)
             ]);
 
             // Bonus to invited referral if coins_required == 0
@@ -232,10 +309,13 @@ class MiningController extends Controller
                 'mining_end_time' => $miningEndTime,
                 'total_team' => (string) $user->total_invite,
                 'coin' => $newCoins,
-                'balance' => $user->token,
+                'balance' => (string) $startingBalance, // ✅ Starting balance (current balance when mining started)
+                'starting_balance' => (string) $startingBalance, // ✅ For consistency
                 'token_per_sec' => $addToken,
                 'usdt' => $usdt,
-                'total_mining_time_in_sec' => $timeLimitInSec
+                'total_mining_time_in_sec' => $totalTime,
+                'seconds_remaining' => $totalTime,
+                'elapsed_seconds' => 0
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
