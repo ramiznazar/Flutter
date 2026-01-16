@@ -41,8 +41,10 @@ class AuthController extends Controller
             return redirect()->route('admin.dashboard');
         }
 
-        // Check database admin table
-        $admin = Admin::where('username', $request->username)->first();
+        // Check database admin table - try username first, then email
+        $admin = Admin::where('username', $request->username)
+                     ->orWhere('email', $request->username)
+                     ->first();
 
         if (!$admin || !Hash::check($request->password, $admin->password)) {
             return back()->withErrors(['username' => 'Invalid username or password.'])->withInput();
