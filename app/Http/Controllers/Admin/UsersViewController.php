@@ -78,87 +78,153 @@ class UsersViewController extends Controller
     public function giveCoins(Request $request)
     {
         $request->validate([
-            'user_identifier' => 'required|string',
+            'target_type' => 'required|in:specific,all',
+            'user_identifier' => 'required_if:target_type,specific|string|nullable',
             'coin_amount' => 'required|numeric',
         ]);
 
-        $identifier = $request->user_identifier;
+        $targetType = $request->target_type;
         $coinAmount = (float) $request->coin_amount;
 
-        $user = User::where(function($q) use ($identifier) {
-                $q->where('email', $identifier)
-                  ->orWhere('username', $identifier)
-                  ->orWhere('id', $identifier);
-            })
-            ->where('account_status', 'active')
-            ->first();
+        if ($targetType === 'all') {
+            // Give coins to all active users
+            $users = User::where('account_status', 'active')->get();
+            $successCount = 0;
+            $failedCount = 0;
+            $totalAffected = 0;
 
-        if (!$user) {
-            return back()->with('message', 'User not found or account is not active.')
-                ->with('messageType', 'danger');
+            foreach ($users as $user) {
+                $currentCoins = (float) $user->coin;
+                $newCoins = $currentCoins + $coinAmount;
+
+                // Only update if new coins won't be negative
+                if ($newCoins >= 0) {
+                    $user->update(['coin' => $newCoins]);
+                    $successCount++;
+                    $totalAffected++;
+                } else {
+                    $failedCount++;
+                }
+            }
+
+            $message = "Coins updated for $successCount users. Amount: $coinAmount coins per user.";
+            if ($failedCount > 0) {
+                $message .= " $failedCount users were skipped due to insufficient balance.";
+            }
+
+            return back()->with('message', $message)
+                ->with('messageType', $successCount > 0 ? 'success' : 'warning');
+        } else {
+            // Give coins to specific user
+            $identifier = $request->user_identifier;
+
+            $user = User::where(function($q) use ($identifier) {
+                    $q->where('email', $identifier)
+                      ->orWhere('username', $identifier)
+                      ->orWhere('id', $identifier);
+                })
+                ->where('account_status', 'active')
+                ->first();
+
+            if (!$user) {
+                return back()->with('message', 'User not found or account is not active.')
+                    ->with('messageType', 'danger');
+            }
+
+            $currentCoins = (float) $user->coin;
+            $newCoins = $currentCoins + $coinAmount;
+
+            if ($newCoins < 0) {
+                return back()->with('message', 'Insufficient coins. User has ' . $currentCoins . ' coins.')
+                    ->with('messageType', 'danger');
+            }
+
+            $user->update(['coin' => $newCoins]);
+
+            return back()->with('message', 'Coins updated successfully. Previous balance: ' . $currentCoins . ', New balance: ' . $newCoins . '.')
+                ->with('messageType', 'success');
         }
-
-        $currentCoins = (float) $user->coin;
-        $newCoins = $currentCoins + $coinAmount;
-
-        if ($newCoins < 0) {
-            return back()->with('message', 'Insufficient coins. User has ' . $currentCoins . ' coins.')
-                ->with('messageType', 'danger');
-        }
-
-        $user->update(['coin' => $newCoins]);
-
-        return back()->with('message', 'Coins updated successfully. Previous balance: ' . $currentCoins . ', New balance: ' . $newCoins . '.')
-            ->with('messageType', 'success');
     }
 
     public function giveBooster(Request $request)
     {
         $request->validate([
-            'booster_user_identifier' => 'required|string',
+            'booster_target_type' => 'required|in:specific,all',
+            'booster_user_identifier' => 'required_if:booster_target_type,specific|string|nullable',
             'booster_type' => 'required|string',
             'booster_duration' => 'required|numeric|min:0.1|max:24',
         ]);
 
-        $identifier = $request->booster_user_identifier;
+        $targetType = $request->booster_target_type;
         $boosterType = $request->booster_type;
         $durationHours = (float) $request->booster_duration;
 
-        $user = User::where(function($q) use ($identifier) {
-                $q->where('email', $identifier)
-                  ->orWhere('username', $identifier)
-                  ->orWhere('id', $identifier);
-            })
-            ->where('account_status', 'active')
-            ->first();
-
-        if (!$user) {
-            return back()->with('message', 'User not found or account is not active.')
-                ->with('messageType', 'danger');
-        }
-
-        // Deactivate any expired boosters
-        UserBooster::where('user_id', $user->id)
-            ->where('expires_at', '<=', Carbon::now())
-            ->update(['is_active' => 0]);
-
         // Calculate expiry time
         $durationSeconds = (int) ($durationHours * 3600);
-        $expiresAt = Carbon::now()->addSeconds($durationSeconds);
-
-        // Create new booster
         $now = Carbon::now();
-        UserBooster::create([
-            'user_id' => $user->id,
-            'booster_type' => $boosterType,
-            'started_at' => $now,
-            'expires_at' => $expiresAt,
-            'is_active' => 1,
-            'created_at' => $now
-        ]);
+        $expiresAt = $now->copy()->addSeconds($durationSeconds);
 
-        return back()->with('message', "Booster ($boosterType) assigned successfully. Expires at: " . $expiresAt->format('Y-m-d H:i:s'))
-            ->with('messageType', 'success');
+        if ($targetType === 'all') {
+            // Give booster to all active users
+            $users = User::where('account_status', 'active')->get();
+            $successCount = 0;
+
+            foreach ($users as $user) {
+                // Deactivate any expired boosters for this user
+                UserBooster::where('user_id', $user->id)
+                    ->where('expires_at', '<=', Carbon::now())
+                    ->update(['is_active' => 0]);
+
+                // Create new booster
+                UserBooster::create([
+                    'user_id' => $user->id,
+                    'booster_type' => $boosterType,
+                    'started_at' => $now,
+                    'expires_at' => $expiresAt,
+                    'is_active' => 1,
+                    'created_at' => $now
+                ]);
+
+                $successCount++;
+            }
+
+            return back()->with('message', "Booster ($boosterType) assigned successfully to $successCount users. Expires at: " . $expiresAt->format('Y-m-d H:i:s'))
+                ->with('messageType', 'success');
+        } else {
+            // Give booster to specific user
+            $identifier = $request->booster_user_identifier;
+
+            $user = User::where(function($q) use ($identifier) {
+                    $q->where('email', $identifier)
+                      ->orWhere('username', $identifier)
+                      ->orWhere('id', $identifier);
+                })
+                ->where('account_status', 'active')
+                ->first();
+
+            if (!$user) {
+                return back()->with('message', 'User not found or account is not active.')
+                    ->with('messageType', 'danger');
+            }
+
+            // Deactivate any expired boosters
+            UserBooster::where('user_id', $user->id)
+                ->where('expires_at', '<=', Carbon::now())
+                ->update(['is_active' => 0]);
+
+            // Create new booster
+            UserBooster::create([
+                'user_id' => $user->id,
+                'booster_type' => $boosterType,
+                'started_at' => $now,
+                'expires_at' => $expiresAt,
+                'is_active' => 1,
+                'created_at' => $now
+            ]);
+
+            return back()->with('message', "Booster ($boosterType) assigned successfully. Expires at: " . $expiresAt->format('Y-m-d H:i:s'))
+                ->with('messageType', 'success');
+        }
     }
 
     public function resetMysteryBox(Request $request)

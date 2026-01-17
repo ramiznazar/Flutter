@@ -16,11 +16,27 @@
                 <h4 class="mt-0 header-title">Give Crutox Coins to User</h4>
                 <p class="text-muted mb-4 font-14">Add or remove Crutox coins from users.</p>
 
-                <form action="{{ route('admin.users.give-coins') }}" method="POST">
+                <form action="{{ route('admin.users.give-coins') }}" method="POST" id="giveCoinsForm">
                     @csrf
                     <div class="form-group mb-3">
+                        <label class="mb-2">Target</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="target_type" id="coins_target_specific" value="specific" {{ old('target_type', 'specific') == 'specific' ? 'checked' : '' }} onchange="toggleCoinsUserField()">
+                            <label class="form-check-label" for="coins_target_specific">
+                                Specific User
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="target_type" id="coins_target_all" value="all" {{ old('target_type') == 'all' ? 'checked' : '' }} onchange="toggleCoinsUserField()">
+                            <label class="form-check-label" for="coins_target_all">
+                                All Users
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-group mb-3" id="coins_user_identifier_group">
                         <label class="mb-2">User ID / Username / Email</label>
-                        <input type="text" class="form-control" name="user_identifier" required placeholder="Enter user ID, username, or email" value="{{ old('user_identifier') }}" />
+                        <input type="text" class="form-control" name="user_identifier" id="coins_user_identifier" placeholder="Enter user ID, username, or email" value="{{ old('user_identifier') }}" />
                         @error('user_identifier')
                             <div class="text-danger">{{ $message }}</div>
                         @enderror
@@ -39,7 +55,7 @@
                         <button type="submit" class="btn btn-primary waves-effect waves-light">
                             Give Coins
                         </button>
-                        <button type="reset" class="btn btn-secondary waves-effect m-l-5">
+                        <button type="reset" class="btn btn-secondary waves-effect m-l-5" onclick="toggleCoinsUserField()">
                             Reset
                         </button>
                     </div>
@@ -55,11 +71,27 @@
                 <h4 class="mt-0 header-title">Give Booster to User</h4>
                 <p class="text-muted mb-4 font-14">Assign mining boosters to users. Boosters multiply mining speed.</p>
 
-                <form action="{{ route('admin.users.give-booster') }}" method="POST">
+                <form action="{{ route('admin.users.give-booster') }}" method="POST" id="giveBoosterForm">
                     @csrf
                     <div class="form-group mb-3">
+                        <label class="mb-2">Target</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="booster_target_type" id="booster_target_specific" value="specific" {{ old('booster_target_type', 'specific') == 'specific' ? 'checked' : '' }} onchange="toggleBoosterUserField()">
+                            <label class="form-check-label" for="booster_target_specific">
+                                Specific User
+                            </label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="booster_target_type" id="booster_target_all" value="all" {{ old('booster_target_type') == 'all' ? 'checked' : '' }} onchange="toggleBoosterUserField()">
+                            <label class="form-check-label" for="booster_target_all">
+                                All Users
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-group mb-3" id="booster_user_identifier_group">
                         <label class="mb-2">User ID / Username / Email</label>
-                        <input type="text" class="form-control" name="booster_user_identifier" required placeholder="Enter user ID, username, or email" value="{{ old('booster_user_identifier') }}" />
+                        <input type="text" class="form-control" name="booster_user_identifier" id="booster_user_identifier" placeholder="Enter user ID, username, or email" value="{{ old('booster_user_identifier') }}" />
                         @error('booster_user_identifier')
                             <div class="text-danger">{{ $message }}</div>
                         @enderror
@@ -91,7 +123,7 @@
                         <button type="submit" class="btn btn-success waves-effect waves-light">
                             Give Booster
                         </button>
-                        <button type="reset" class="btn btn-secondary waves-effect m-l-5">
+                        <button type="reset" class="btn btn-secondary waves-effect m-l-5" onclick="toggleBoosterUserField()">
                             Reset
                         </button>
                     </div>
@@ -318,3 +350,62 @@
 @endsection
 
 @section('pageTitle', 'Crutox Admin - Users Management')
+
+@push('scripts')
+<script>
+function toggleCoinsUserField() {
+    const targetType = document.querySelector('input[name="target_type"]:checked').value;
+    const userField = document.getElementById('coins_user_identifier');
+    const userGroup = document.getElementById('coins_user_identifier_group');
+    
+    if (targetType === 'all') {
+        userField.removeAttribute('required');
+        userGroup.style.display = 'none';
+    } else {
+        userField.setAttribute('required', 'required');
+        userGroup.style.display = 'block';
+    }
+}
+
+function toggleBoosterUserField() {
+    const targetType = document.querySelector('input[name="booster_target_type"]:checked').value;
+    const userField = document.getElementById('booster_user_identifier');
+    const userGroup = document.getElementById('booster_user_identifier_group');
+    
+    if (targetType === 'all') {
+        userField.removeAttribute('required');
+        userGroup.style.display = 'none';
+    } else {
+        userField.setAttribute('required', 'required');
+        userGroup.style.display = 'block';
+    }
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    toggleCoinsUserField();
+    toggleBoosterUserField();
+    
+    // Add confirmation for "All Users" actions
+    document.getElementById('giveCoinsForm').addEventListener('submit', function(e) {
+        const targetType = document.querySelector('input[name="target_type"]:checked').value;
+        if (targetType === 'all') {
+            if (!confirm('Are you sure you want to give coins to ALL users? This action will affect all active users in the database.')) {
+                e.preventDefault();
+                return false;
+            }
+        }
+    });
+    
+    document.getElementById('giveBoosterForm').addEventListener('submit', function(e) {
+        const targetType = document.querySelector('input[name="booster_target_type"]:checked').value;
+        if (targetType === 'all') {
+            if (!confirm('Are you sure you want to give boosters to ALL users? This action will affect all active users in the database.')) {
+                e.preventDefault();
+                return false;
+            }
+        }
+    });
+});
+</script>
+@endpush
