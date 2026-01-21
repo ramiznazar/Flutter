@@ -67,6 +67,13 @@ Route::prefix('admin')->name('admin.')->group(function () {
         // KYC Management
         Route::get('/kyc', [\App\Http\Controllers\Admin\KycViewController::class, 'index'])->name('kyc.index');
         Route::post('/kyc/update-status', [\App\Http\Controllers\Admin\KycViewController::class, 'updateStatus'])->name('kyc.update-status');
+        
+        // Badges Management
+        Route::get('/badges', [\App\Http\Controllers\Admin\BadgeViewController::class, 'index'])->name('badges.index');
+        Route::post('/badges', [\App\Http\Controllers\Admin\BadgeViewController::class, 'store'])->name('badges.store');
+        Route::put('/badges/{id}', [\App\Http\Controllers\Admin\BadgeViewController::class, 'update'])->name('badges.update');
+        Route::delete('/badges/{id}', [\App\Http\Controllers\Admin\BadgeViewController::class, 'destroy'])->name('badges.destroy');
+        
         Route::get('/user-stats', function() { return view('admin.user-stats'); })->name('user-stats');
         Route::get('/profile', [\App\Http\Controllers\Admin\ProfileController::class, 'index'])->name('profile');
         Route::post('/profile', [\App\Http\Controllers\Admin\ProfileController::class, 'update'])->name('profile.update');

@@ -97,6 +97,13 @@
                 </li>
 
                 <li>
+                    <a href="{{ route('admin.badges.index') }}" class="waves-effect {{ request()->routeIs('admin.badges.*') ? 'active' : '' }}">
+                        <i class="mdi mdi-medal"></i>
+                        <span> Badges Management </span>
+                    </a>
+                </li>
+
+                <li>
                     <a href="{{ route('admin.kyc-settings') }}" class="waves-effect {{ request()->routeIs('admin.kyc-settings') ? 'active' : '' }}">
                         <i class="mdi mdi-tune"></i>
                         <span> KYC Settings </span>

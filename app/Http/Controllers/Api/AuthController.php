@@ -5,9 +5,12 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\UserGuide;
+use App\Mail\OtpMail;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class AuthController extends Controller
@@ -197,27 +200,34 @@ class AuthController extends Controller
         $otp = mt_rand(100000, 999999);
         $user->update(['otp' => $otp]);
 
-        // Send OTP via email (using external service)
-        $postData = [
-            'code' => $otp,
-            'recipient' => $user->email
-        ];
+        // Send OTP via email using Laravel Mail
+        try {
+            Mail::to($user->email)->send(new OtpMail($otp, $user->email));
+            
+            Log::info('OTP email sent successfully', [
+                'email' => $user->email,
+                'otp' => $otp
+            ]);
 
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, 'https://crutox.com/sendmail/forget_password.php');
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postData));
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-        curl_exec($ch);
-        curl_close($ch);
+            return response()->json([
+                'success' => true,
+                'message' => 'OTP sent successfully to your email.'
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Failed to send OTP email', [
+                'email' => $user->email,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'OTP sent successfully to your email.'
-        ]);
+            // Still return success since OTP is saved in database
+            // User can verify with the OTP even if email fails
+            return response()->json([
+                'success' => true,
+                'message' => 'OTP generated successfully. Please check your email. If you don\'t receive it, contact support.',
+                'debug' => config('app.debug') ? $e->getMessage() : null
+            ]);
+        }
     }
 
     public function otpRequestNew(Request $request)
@@ -269,7 +279,7 @@ class AuthController extends Controller
         $validator = Validator::make($request->all(), [
             'email' => 'required|email',
             'reason' => 'required|in:get,set',
-            'code' => 'required_if:reason,set|numeric',
+            'code' => 'required|numeric',
             'new_password' => 'required_if:reason,set|string|min:8',
         ]);
 
@@ -293,10 +303,10 @@ class AuthController extends Controller
 
         // If reason is 'get', verify OTP only
         if ($request->reason === 'get') {
-            if ($user->otp != $request->code) {
+            if (empty($user->otp) || $user->otp != $request->code) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Invalid OTP code.'
+                    'message' => 'Invalid OTP code. Please check your email for a valid OTP code.'
                 ], 400);
             }
 

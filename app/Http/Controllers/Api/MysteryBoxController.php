@@ -6,8 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\MysteryBoxClaim;
 use App\Models\Setting;
+use App\Models\UserBooster;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
 class MysteryBoxController extends Controller
@@ -195,9 +197,7 @@ class MysteryBoxController extends Controller
         }
         
         $boxType = $request->box_type;
-        $minCoins = (float) ($settings->{"{$boxType}_box_min_coins"} ?? 1.00);
-        $maxCoins = (float) ($settings->{"{$boxType}_box_max_coins"} ?? 5.00);
-
+        
         $claim = MysteryBoxClaim::where('user_id', $user->id)
             ->where('box_type', $boxType)
             ->where('box_opened', 0)
@@ -218,32 +218,94 @@ class MysteryBoxController extends Controller
             ], 400);
         }
 
-        // Generate random reward
-        $rewardCoins = round(rand($minCoins * 100, $maxCoins * 100) / 100, 2);
-
-        // Update claim and give reward
-        \Illuminate\Support\Facades\DB::beginTransaction();
+        // Check if legendary box should give booster instead of coins
+        $rewardType = $settings->legendary_box_reward_type ?? 'coins';
+        
+        DB::beginTransaction();
 
         try {
-            $claim->update([
-                'box_opened' => 1,
-                'reward_coins' => $rewardCoins,
-                'opened_at' => Carbon::now()
-            ]);
+            $now = Carbon::now();
+            
+            if ($boxType === 'legendary' && $rewardType === 'booster') {
+                // Legendary box gives booster reward
+                $boosterTypes = explode(',', $settings->legendary_box_booster_types ?? '2x,3x,5x');
+                $boosterTypes = array_map('trim', $boosterTypes);
+                $boosterTypes = array_filter($boosterTypes); // Remove empty values
+                
+                if (empty($boosterTypes)) {
+                    $boosterTypes = ['2x', '3x', '5x']; // Default fallback
+                }
+                
+                // Randomly select a booster type
+                $selectedBooster = $boosterTypes[array_rand($boosterTypes)];
+                
+                // Get booster duration (default 10 hours)
+                $boosterDurationHours = (float) ($settings->legendary_box_booster_duration ?? 10.00);
+                $boosterDurationSeconds = (int) ($boosterDurationHours * 3600);
+                $expiresAt = $now->copy()->addSeconds($boosterDurationSeconds);
+                
+                // Deactivate all existing active boosters for this user
+                UserBooster::where('user_id', $user->id)
+                    ->where('is_active', 1)
+                    ->update(['is_active' => 0]);
+                
+                // Create new booster
+                $booster = UserBooster::create([
+                    'user_id' => $user->id,
+                    'booster_type' => $selectedBooster,
+                    'started_at' => $now,
+                    'expires_at' => $expiresAt,
+                    'is_active' => 1,
+                    'created_at' => $now
+                ]);
+                
+                // Update claim
+                $claim->update([
+                    'box_opened' => 1,
+                    'reward_coins' => 0, // No coins for legendary when booster is enabled
+                    'opened_at' => $now
+                ]);
+                
+                DB::commit();
+                
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Box opened successfully',
+                    'reward_type' => 'booster',
+                    'booster_type' => $selectedBooster,
+                    'booster_duration_hours' => $boosterDurationHours,
+                    'expires_at' => $expiresAt->format('Y-m-d H:i:s'),
+                    'new_balance' => (float) $user->token
+                ]);
+            } else {
+                // Other boxes or legendary with coins enabled - give coins
+                $minCoins = (float) ($settings->{"{$boxType}_box_min_coins"} ?? 1.00);
+                $maxCoins = (float) ($settings->{"{$boxType}_box_max_coins"} ?? 5.00);
+                
+                // Generate random reward
+                $rewardCoins = round(rand($minCoins * 100, $maxCoins * 100) / 100, 2);
+                
+                $claim->update([
+                    'box_opened' => 1,
+                    'reward_coins' => $rewardCoins,
+                    'opened_at' => $now
+                ]);
 
-            $user->increment('token', $rewardCoins);
-            $user->refresh();
+                $user->increment('token', $rewardCoins);
+                $user->refresh();
 
-            \Illuminate\Support\Facades\DB::commit();
+                DB::commit();
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Box opened successfully',
-                'reward_coins' => $rewardCoins,
-                'new_balance' => (float) $user->token
-            ]);
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Box opened successfully',
+                    'reward_type' => 'coins',
+                    'reward_coins' => $rewardCoins,
+                    'new_balance' => (float) $user->token
+                ]);
+            }
         } catch (\Exception $e) {
-            \Illuminate\Support\Facades\DB::rollBack();
+            DB::rollBack();
             return response()->json([
                 'success' => false,
                 'message' => 'Error opening box: ' . $e->getMessage()
@@ -283,9 +345,39 @@ class MysteryBoxController extends Controller
 
         $boxTypes = ['common', 'rare', 'epic', 'legendary'];
         $now = Carbon::now();
+        $twentyFourHoursAgo = $now->copy()->subHours(24);
         $mysteryBoxData = [];
 
         foreach ($boxTypes as $boxType) {
+            // Check if user has opened this box type within the last 24 hours
+            $recentlyOpened = MysteryBoxClaim::where('user_id', $user->id)
+                ->where('box_type', $boxType)
+                ->where('box_opened', 1)
+                ->where('opened_at', '>=', $twentyFourHoursAgo)
+                ->orderBy('opened_at', 'desc')
+                ->first();
+
+            // If box was opened within 24 hours, exclude it from the list
+            if ($recentlyOpened) {
+                $resetTime = Carbon::parse($recentlyOpened->opened_at)->addHours(24);
+                $secondsUntilReset = $now->diffInSeconds($resetTime);
+                
+                // Don't include this box type in the response
+                continue;
+            }
+
+            // Auto-reset boxes that were opened more than 24 hours ago
+            $oldOpenedBoxes = MysteryBoxClaim::where('user_id', $user->id)
+                ->where('box_type', $boxType)
+                ->where('box_opened', 1)
+                ->where('opened_at', '<', $twentyFourHoursAgo)
+                ->get();
+            
+            // Delete old opened boxes to allow new ones
+            foreach ($oldOpenedBoxes as $oldBox) {
+                $oldBox->delete();
+            }
+
             // Get active (not opened) claim
             $activeClaim = MysteryBoxClaim::where('user_id', $user->id)
                 ->where('box_type', $boxType)
@@ -293,10 +385,11 @@ class MysteryBoxController extends Controller
                 ->orderBy('created_at', 'desc')
                 ->first();
 
-            // Get all opened boxes count
+            // Get all opened boxes count (excluding recently opened)
             $openedCount = MysteryBoxClaim::where('user_id', $user->id)
                 ->where('box_type', $boxType)
                 ->where('box_opened', 1)
+                ->where('opened_at', '<', $twentyFourHoursAgo)
                 ->count();
 
             // Get total reward from opened boxes

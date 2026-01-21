@@ -191,6 +191,13 @@
                     
                     <div class="form-group">
                         <label>Status</label>
+                        @if($editKYC->didit_status)
+                            <div class="alert alert-info mb-2" style="font-size: 12px;">
+                                <i class="mdi mdi-information"></i> 
+                                <strong>Auto-synced:</strong> Status automatically follows Didit status. 
+                                You can manually override it below if needed.
+                            </div>
+                        @endif
                         <select class="form-control" name="status" required>
                             <option value="pending" {{ $editKYC->status === 'pending' ? 'selected' : '' }}>Pending</option>
                             <option value="approved" {{ $editKYC->status === 'approved' ? 'selected' : '' }}>Approved</option>

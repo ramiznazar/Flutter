@@ -12,9 +12,10 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // Seed admin user
+        // Seed admin user and badges
         $this->call([
             AdminSeeder::class,
+            BadgeSeeder::class,
         ]);
 
         // \App\Models\User::factory(10)->create();

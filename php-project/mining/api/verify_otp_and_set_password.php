@@ -58,10 +58,17 @@ $userData = $result->fetch_assoc();
 
 // If 'reason' is 'get', check OTP
 if ($reason === 'get') {
+    // Validate code is provided
+    if(empty($code)){
+        $response['message'] = 'OTP code is required.';
+        echo json_encode($response);
+        exit;
+    }
+    
     // Fetch OTP from database and compare with provided code
     $storedOtp = $userData['otp'];
 
-    if ($storedOtp !== $code) {
+    if (empty($storedOtp) || $storedOtp !== $code) {
         $response['message'] = 'You entered an invalid OTP. Please check your email for a valid OTP code.';
         echo json_encode($response);
         exit;

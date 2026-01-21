@@ -150,7 +150,8 @@ class SettingsViewController extends Controller
             'common_box_cooldown', 'common_box_ads', 'common_box_min_coins', 'common_box_max_coins',
             'rare_box_cooldown', 'rare_box_ads', 'rare_box_min_coins', 'rare_box_max_coins',
             'epic_box_cooldown', 'epic_box_ads', 'epic_box_min_coins', 'epic_box_max_coins',
-            'legendary_box_cooldown', 'legendary_box_ads', 'legendary_box_min_coins', 'legendary_box_max_coins'
+            'legendary_box_cooldown', 'legendary_box_ads', 'legendary_box_min_coins', 'legendary_box_max_coins',
+            'legendary_box_reward_type', 'legendary_box_booster_types', 'legendary_box_booster_duration'
         ]);
         
         $settings = Setting::first();
@@ -179,6 +180,9 @@ class SettingsViewController extends Controller
                 'ads' => $settings->legendary_box_ads ?? 10,
                 'min_coins' => $settings->legendary_box_min_coins ?? 50.00,
                 'max_coins' => $settings->legendary_box_max_coins ?? 200.00,
+                'reward_type' => $settings->legendary_box_reward_type ?? 'booster',
+                'booster_types' => $settings->legendary_box_booster_types ?? '2x,3x,5x',
+                'booster_duration' => $settings->legendary_box_booster_duration ?? 10.00,
             ],
         ];
 
@@ -187,31 +191,86 @@ class SettingsViewController extends Controller
 
     public function updateMysteryBoxSettings(Request $request)
     {
-        $request->validate([
-            'box_type' => 'required|in:common,rare,epic,legendary',
-            'cooldown' => 'required|integer|min:0',
-            'ads_required' => 'required|integer|min:1',
-            'min_coins' => 'required|numeric|min:0',
-            'max_coins' => 'required|numeric|min:0',
-        ]);
-
         $boxType = $request->box_type;
+        
+        if ($boxType === 'legendary') {
+            $request->validate([
+                'box_type' => 'required|in:common,rare,epic,legendary',
+                'cooldown' => 'required|integer|min:0',
+                'ads_required' => 'required|integer|min:1',
+                'min_coins' => 'nullable|numeric|min:0',
+                'max_coins' => 'nullable|numeric|min:0',
+                'reward_type' => 'required|in:coins,booster',
+                'booster_types' => 'required_if:reward_type,booster|string',
+                'booster_duration' => 'required_if:reward_type,booster|numeric|min:0.1|max:168',
+            ]);
+        } else {
+            $request->validate([
+                'box_type' => 'required|in:common,rare,epic,legendary',
+                'cooldown' => 'required|integer|min:0',
+                'ads_required' => 'required|integer|min:1',
+                'min_coins' => 'required|numeric|min:0',
+                'max_coins' => 'required|numeric|min:0',
+            ]);
+        }
+
         $fieldPrefix = $boxType . '_box_';
 
-        // Ensure columns exist before updating (matching PHP behavior)
-        $this->ensureSettingsColumnsExist([
+        // Ensure columns exist before updating
+        $columnsToCheck = [
             $fieldPrefix . 'cooldown',
             $fieldPrefix . 'ads',
             $fieldPrefix . 'min_coins',
             $fieldPrefix . 'max_coins'
-        ]);
+        ];
+        
+        if ($boxType === 'legendary') {
+            $columnsToCheck = array_merge($columnsToCheck, [
+                'legendary_box_reward_type',
+                'legendary_box_booster_types',
+                'legendary_box_booster_duration'
+            ]);
+        }
+        
+        $this->ensureSettingsColumnsExist($columnsToCheck);
 
         $updateData = [
             $fieldPrefix . 'cooldown' => $request->cooldown,
             $fieldPrefix . 'ads' => $request->ads_required,
-            $fieldPrefix . 'min_coins' => $request->min_coins,
-            $fieldPrefix . 'max_coins' => $request->max_coins,
         ];
+        
+        // For legendary box, handle reward type
+        if ($boxType === 'legendary') {
+            $updateData['legendary_box_reward_type'] = $request->reward_type ?? 'booster';
+            
+            if ($request->reward_type === 'booster') {
+                // Booster mode - validate and set booster settings
+                $boosterTypes = $request->booster_types ?? '2x,3x,5x';
+                // Clean and validate booster types
+                $boosterTypesArray = array_map('trim', explode(',', $boosterTypes));
+                $boosterTypesArray = array_filter($boosterTypesArray);
+                $validBoosterTypes = ['2x', '3x', '5x'];
+                $boosterTypesArray = array_intersect($boosterTypesArray, $validBoosterTypes);
+                
+                if (empty($boosterTypesArray)) {
+                    $boosterTypesArray = ['2x', '3x', '5x']; // Default fallback
+                }
+                
+                $updateData['legendary_box_booster_types'] = implode(',', $boosterTypesArray);
+                $updateData['legendary_box_booster_duration'] = (float) ($request->booster_duration ?? 10.00);
+                // Keep min/max coins for reference but they won't be used
+                $updateData[$fieldPrefix . 'min_coins'] = $request->min_coins ?? 0;
+                $updateData[$fieldPrefix . 'max_coins'] = $request->max_coins ?? 0;
+            } else {
+                // Coins mode - use min/max coins
+                $updateData[$fieldPrefix . 'min_coins'] = $request->min_coins ?? 50.00;
+                $updateData[$fieldPrefix . 'max_coins'] = $request->max_coins ?? 200.00;
+            }
+        } else {
+            // Other boxes - always use coins
+            $updateData[$fieldPrefix . 'min_coins'] = $request->min_coins;
+            $updateData[$fieldPrefix . 'max_coins'] = $request->max_coins;
+        }
 
         $settings = Setting::first();
         if ($settings) {
@@ -301,6 +360,9 @@ class SettingsViewController extends Controller
             'legendary_box_ads' => ['type' => 'integer', 'params' => [], 'default' => 10, 'after' => 'legendary_box_cooldown'],
             'legendary_box_min_coins' => ['type' => 'decimal', 'params' => [10, 2], 'default' => 50.00, 'after' => 'legendary_box_ads'],
             'legendary_box_max_coins' => ['type' => 'decimal', 'params' => [10, 2], 'default' => 200.00, 'after' => 'legendary_box_min_coins'],
+            'legendary_box_reward_type' => ['type' => 'string', 'params' => [50], 'default' => 'booster', 'after' => 'legendary_box_max_coins'],
+            'legendary_box_booster_types' => ['type' => 'string', 'params' => [50], 'default' => '2x,3x,5x', 'after' => 'legendary_box_reward_type'],
+            'legendary_box_booster_duration' => ['type' => 'decimal', 'params' => [5, 2], 'default' => 10.00, 'after' => 'legendary_box_booster_types'],
             'kyc_mining_sessions' => ['type' => 'integer', 'params' => [], 'default' => 14, 'after' => 'legendary_box_max_coins'],
             'kyc_referrals_required' => ['type' => 'integer', 'params' => [], 'default' => 10, 'after' => 'kyc_mining_sessions'],
             'ad_waterfall_order' => ['type' => 'text', 'params' => [], 'default' => null, 'after' => 'kyc_referrals_required'],

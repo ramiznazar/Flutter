@@ -226,7 +226,6 @@ class UserController extends Controller
 
     public function getBadges(Request $request)
     {
-        // Get user's badges based on achievements
         $validator = Validator::make($request->all(), [
             'email' => 'required|email',
         ]);
@@ -247,12 +246,82 @@ class UserController extends Controller
             ], 404);
         }
 
-        // Logic to determine which badges user has earned
-        // This would check mining_sessions, spin_wheel, total_invite, etc.
-        // For now, return basic structure
+        // Get user level data
+        $userLevel = \App\Models\UserLevel::where('user_id', $user->id)->first();
+        $miningSessions = $userLevel ? (int) $userLevel->mining_session : 0;
+        $spinWheel = $userLevel ? (int) $userLevel->spin_wheel : 0;
+        $totalInvite = (int) $user->total_invite;
+        $token = (float) $user->token;
+
+        // Get total social media tasks
+        $totalSocialMediaTasks = \App\Models\SocialMediaSetting::count();
+        
+        // Get completed social media tasks
+        $completedSocialMediaTasks = \Illuminate\Support\Facades\DB::table('social_media_tokens')
+            ->where('user_id', $user->id)
+            ->select('social_media_id')
+            ->distinct()
+            ->count();
+
+        // Get all badges
+        $badges = \App\Models\Badge::orderBy('id', 'asc')->get();
+        
+        $earnedBadges = [];
+
+        // Add "Account Created" badge first
+        $accountCreatedBadge = $badges->firstWhere('badge_name', 'Newbie Explorer: Once User Creates Account');
+        $earnedBadges[] = [
+            'title' => 'Newbie Explorer: Once User Creates Account',
+            'earned' => $user->join_date ? true : false,
+            'progress' => null,
+            'total' => null,
+            'badges_icon' => $accountCreatedBadge ? $accountCreatedBadge->badges_icon : null
+        ];
+
+        // Process other badges
+        foreach ($badges as $badge) {
+            // Skip the account created badge as it's already processed
+            if ($badge->badge_name === 'Newbie Explorer: Once User Creates Account') {
+                continue;
+            }
+
+            $badgeData = [
+                'title' => $badge->badge_name,
+                'earned' => false,
+                'progress' => null,
+                'total' => null,
+                'badges_icon' => $badge->badges_icon
+            ];
+
+            // Check badge requirements
+            if ($badge->mining_sessions_required !== null) {
+                $badgeData['progress'] = $miningSessions;
+                $badgeData['total'] = $badge->mining_sessions_required;
+                $badgeData['earned'] = $miningSessions >= $badge->mining_sessions_required;
+            } elseif ($badge->spin_wheel_required !== null) {
+                $badgeData['progress'] = $spinWheel;
+                $badgeData['total'] = $badge->spin_wheel_required;
+                $badgeData['earned'] = $spinWheel >= $badge->spin_wheel_required;
+            } elseif ($badge->invite_friends_required !== null) {
+                $badgeData['progress'] = $totalInvite;
+                $badgeData['total'] = $badge->invite_friends_required;
+                $badgeData['earned'] = $totalInvite >= $badge->invite_friends_required;
+            } elseif ($badge->crutox_in_wallet_required !== null) {
+                $badgeData['progress'] = $token;
+                $badgeData['total'] = $badge->crutox_in_wallet_required;
+                $badgeData['earned'] = $token >= $badge->crutox_in_wallet_required;
+            } elseif ($badge->social_media_task_completed) {
+                $badgeData['progress'] = $completedSocialMediaTasks;
+                $badgeData['total'] = $totalSocialMediaTasks;
+                $badgeData['earned'] = $completedSocialMediaTasks >= $totalSocialMediaTasks && $totalSocialMediaTasks > 0;
+            }
+
+            $earnedBadges[] = $badgeData;
+        }
+
         return response()->json([
             'success' => true,
-            'data' => []
+            'data' => $earnedBadges
         ]);
     }
 

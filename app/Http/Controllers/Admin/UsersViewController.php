@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\UserBooster;
 use App\Models\MysteryBoxClaim;
+use App\Jobs\GiveCoinsToAllUsers;
+use App\Jobs\GiveBoosterToAllUsers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
@@ -87,33 +89,22 @@ class UsersViewController extends Controller
         $coinAmount = (float) $request->coin_amount;
 
         if ($targetType === 'all') {
-            // Give coins to all active users
-            $users = User::where('account_status', 'active')->get();
-            $successCount = 0;
-            $failedCount = 0;
-            $totalAffected = 0;
+            // Dispatch job after response is sent to ensure immediate return
+            GiveCoinsToAllUsers::dispatchAfterResponse($coinAmount);
 
-            foreach ($users as $user) {
-                $currentCoins = (float) $user->coin;
-                $newCoins = $currentCoins + $coinAmount;
-
-                // Only update if new coins won't be negative
-                if ($newCoins >= 0) {
-                    $user->update(['coin' => $newCoins]);
-                    $successCount++;
-                    $totalAffected++;
-                } else {
-                    $failedCount++;
-                }
+            $message = "Coins distribution job has been queued. Amount: $coinAmount coins per user. The process will run in the background and may take a few minutes depending on the number of users.";
+            
+            // Return JSON for AJAX requests, otherwise redirect
+            if (request()->ajax() || request()->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => $message,
+                    'redirect' => route('admin.users.index')
+                ]);
             }
-
-            $message = "Coins updated for $successCount users. Amount: $coinAmount coins per user.";
-            if ($failedCount > 0) {
-                $message .= " $failedCount users were skipped due to insufficient balance.";
-            }
-
+            
             return back()->with('message', $message)
-                ->with('messageType', $successCount > 0 ? 'success' : 'warning');
+                ->with('messageType', 'info');
         } else {
             // Give coins to specific user
             $identifier = $request->user_identifier;
@@ -127,22 +118,35 @@ class UsersViewController extends Controller
                 ->first();
 
             if (!$user) {
-                return back()->with('message', 'User not found or account is not active.')
-                    ->with('messageType', 'danger');
+                $message = 'User not found or account is not active.';
+                if (request()->ajax() || request()->wantsJson()) {
+                    return response()->json(['success' => false, 'message' => $message], 404);
+                }
+                return back()->with('message', $message)->with('messageType', 'danger');
             }
 
             $currentCoins = (float) $user->coin;
             $newCoins = $currentCoins + $coinAmount;
 
             if ($newCoins < 0) {
-                return back()->with('message', 'Insufficient coins. User has ' . $currentCoins . ' coins.')
-                    ->with('messageType', 'danger');
+                $message = 'Insufficient coins. User has ' . $currentCoins . ' coins.';
+                if (request()->ajax() || request()->wantsJson()) {
+                    return response()->json(['success' => false, 'message' => $message], 400);
+                }
+                return back()->with('message', $message)->with('messageType', 'danger');
             }
 
             $user->update(['coin' => $newCoins]);
 
-            return back()->with('message', 'Coins updated successfully. Previous balance: ' . $currentCoins . ', New balance: ' . $newCoins . '.')
-                ->with('messageType', 'success');
+            $message = 'Coins updated successfully. Previous balance: ' . $currentCoins . ', New balance: ' . $newCoins . '.';
+            if (request()->ajax() || request()->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => $message,
+                    'redirect' => route('admin.users.index')
+                ]);
+            }
+            return back()->with('message', $message)->with('messageType', 'success');
         }
     }
 
@@ -165,31 +169,22 @@ class UsersViewController extends Controller
         $expiresAt = $now->copy()->addSeconds($durationSeconds);
 
         if ($targetType === 'all') {
-            // Give booster to all active users
-            $users = User::where('account_status', 'active')->get();
-            $successCount = 0;
+            // Dispatch job after response is sent to ensure immediate return
+            GiveBoosterToAllUsers::dispatchAfterResponse($boosterType, $expiresAt);
 
-            foreach ($users as $user) {
-                // Deactivate any expired boosters for this user
-                UserBooster::where('user_id', $user->id)
-                    ->where('expires_at', '<=', Carbon::now())
-                    ->update(['is_active' => 0]);
-
-                // Create new booster
-                UserBooster::create([
-                    'user_id' => $user->id,
-                    'booster_type' => $boosterType,
-                    'started_at' => $now,
-                    'expires_at' => $expiresAt,
-                    'is_active' => 1,
-                    'created_at' => $now
+            $message = "Booster ($boosterType) distribution job has been queued. Duration: " . $request->booster_duration . " hours. Expires at: " . $expiresAt->format('Y-m-d H:i:s') . ". The process will run in the background and may take a few minutes depending on the number of users.";
+            
+            // Return JSON for AJAX requests, otherwise redirect
+            if (request()->ajax() || request()->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => $message,
+                    'redirect' => route('admin.users.index')
                 ]);
-
-                $successCount++;
             }
-
-            return back()->with('message', "Booster ($boosterType) assigned successfully to $successCount users. Expires at: " . $expiresAt->format('Y-m-d H:i:s'))
-                ->with('messageType', 'success');
+            
+            return back()->with('message', $message)
+                ->with('messageType', 'info');
         } else {
             // Give booster to specific user
             $identifier = $request->booster_user_identifier;
@@ -203,8 +198,11 @@ class UsersViewController extends Controller
                 ->first();
 
             if (!$user) {
-                return back()->with('message', 'User not found or account is not active.')
-                    ->with('messageType', 'danger');
+                $message = 'User not found or account is not active.';
+                if (request()->ajax() || request()->wantsJson()) {
+                    return response()->json(['success' => false, 'message' => $message], 404);
+                }
+                return back()->with('message', $message)->with('messageType', 'danger');
             }
 
             // Deactivate any expired boosters
@@ -222,8 +220,15 @@ class UsersViewController extends Controller
                 'created_at' => $now
             ]);
 
-            return back()->with('message', "Booster ($boosterType) assigned successfully. Expires at: " . $expiresAt->format('Y-m-d H:i:s'))
-                ->with('messageType', 'success');
+            $message = "Booster ($boosterType) assigned successfully. Expires at: " . $expiresAt->format('Y-m-d H:i:s');
+            if (request()->ajax() || request()->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => $message,
+                    'redirect' => route('admin.users.index')
+                ]);
+            }
+            return back()->with('message', $message)->with('messageType', 'success');
         }
     }
 

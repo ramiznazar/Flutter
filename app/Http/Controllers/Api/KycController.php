@@ -355,4 +355,97 @@ class KycController extends Controller
     {
         return $this->checkEligibility($request);
     }
+
+    /**
+     * Create Didit verification request
+     * This endpoint is called before submitting KYC documents to create a verification request
+     */
+    public function diditCreateRequest(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'email' => 'required|email',
+            'full_name' => 'required|string',
+            'dob' => 'required|date|date_format:Y-m-d',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Missing required fields or invalid date format. Date must be YYYY-MM-DD.'
+            ], 400);
+        }
+
+        $user = User::where('email', $request->email)
+            ->where('account_status', 'active')
+            ->first();
+
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'User not found or account not active'
+            ], 404);
+        }
+
+        // Check eligibility
+        $eligibility = $this->checkEligibility($request);
+        $eligibilityData = json_decode($eligibility->getContent(), true);
+        
+        if (!$eligibilityData['data']['can_submit']) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Not eligible to submit KYC or already submitted'
+            ], 400);
+        }
+
+        // Check if already submitted and pending/approved
+        $existingKyc = KycSubmission::where('user_id', $user->id)
+            ->whereIn('status', ['pending', 'approved'])
+            ->orderBy('created_at', 'desc')
+            ->first();
+
+        if ($existingKyc) {
+            return response()->json([
+                'success' => false,
+                'message' => 'KYC submission already exists and is pending or approved'
+            ], 400);
+        }
+
+        // Generate a temporary request ID for tracking
+        $requestId = 'req_' . uniqid() . '_' . time();
+        
+        // Note: Based on the current Didit API implementation, verification happens server-side
+        // when images are submitted via /api/kyc_submit. However, if the Flutter app uses
+        // Didit SDK which requires a verification URL/session, we would need to call Didit's
+        // session creation API here. For now, we'll return a response that allows the app
+        // to proceed with image submission.
+        
+        // Return success with verification details
+        // The Flutter app should proceed to capture and submit images via /api/kyc_submit
+        // Note: Didit verification happens server-side when images are submitted
+        $baseUrl = $request->getSchemeAndHttpHost();
+        
+        return response()->json([
+            'success' => true,
+            'message' => 'Verification request created successfully',
+            'data' => [
+                'request_id' => $requestId,
+                'verification_url' => $baseUrl . '/api/kyc_submit', // Endpoint for submitting images
+                'verification_session_id' => $requestId,
+                'session_id' => $requestId,
+                'email' => $user->email,
+                'full_name' => $request->full_name,
+                'dob' => $request->dob,
+                'can_proceed' => true,
+                'verification_method' => 'image_submission',
+                'next_endpoint' => '/api/kyc_submit',
+                'required_fields' => [
+                    'email',
+                    'full_name',
+                    'dob',
+                    'front_image',
+                    'back_image'
+                ]
+            ]
+        ]);
+    }
 }

@@ -20,6 +20,12 @@ class KycViewController extends Controller
         
         if ($editId) {
             $editKYC = KycSubmission::with('user')->find($editId);
+            // Sync status with Didit status when viewing details
+            if ($editKYC) {
+                $this->syncStatusWithDidit($editKYC);
+                // Refresh the model to get updated status
+                $editKYC->refresh();
+            }
         }
 
         $page = $request->get('page', 1);
@@ -34,6 +40,9 @@ class KycViewController extends Controller
             ->limit($perPage)
             ->get()
             ->map(function($submission) {
+                // Auto-sync status with Didit status if Didit status exists
+                $syncedStatus = $this->syncStatusWithDidit($submission);
+                
                 return [
                     'id' => $submission->id,
                     'user_id' => $submission->user_id,
@@ -42,7 +51,7 @@ class KycViewController extends Controller
                     'dob' => $submission->dob,
                     'front_image' => $submission->front_image,
                     'back_image' => $submission->back_image,
-                    'status' => $submission->status,
+                    'status' => $syncedStatus, // Use synced status
                     'admin_notes' => $submission->admin_notes,
                     'didit_request_id' => $submission->didit_request_id,
                     'didit_status' => $submission->didit_status,
@@ -73,6 +82,39 @@ class KycViewController extends Controller
         return redirect()->route('admin.kyc.index')
             ->with('message', 'KYC status updated successfully.')
             ->with('messageType', 'success');
+    }
+
+    /**
+     * Sync admin status with Didit status
+     * Maps Didit status to admin status:
+     * - APPROVED -> approved
+     * - DECLINED -> rejected
+     * - null/pending -> pending
+     */
+    private function syncStatusWithDidit($submission)
+    {
+        // If Didit status exists, sync admin status with it
+        if ($submission->didit_status) {
+            $diditStatus = strtoupper(trim($submission->didit_status));
+            
+            if ($diditStatus === 'APPROVED') {
+                $newStatus = 'approved';
+            } elseif ($diditStatus === 'DECLINED') {
+                $newStatus = 'rejected';
+            } else {
+                // For other Didit statuses (PENDING, etc.), keep as pending
+                $newStatus = 'pending';
+            }
+            
+            // Only update if status has changed (to avoid unnecessary DB writes)
+            if ($submission->status !== $newStatus) {
+                $submission->update(['status' => $newStatus]);
+                return $newStatus;
+            }
+        }
+        
+        // Return current status if no Didit status or already synced
+        return $submission->status;
     }
 }
 

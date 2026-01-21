@@ -86,10 +86,19 @@ Route::post('/mystery_box_details', [MysteryBoxController::class, 'getDetails'])
 
 // KYC Routes
 Route::post('/kyc_check_eligibility', [KycController::class, 'checkEligibility']);
-Route::post('/kyc_submit', [KycController::class, 'submit']);
+Route::match(['get', 'post'], '/kyc_submit', function(Request $request) {
+    if ($request->isMethod('get')) {
+        return response()->json([
+            'success' => false,
+            'message' => 'This endpoint only accepts POST requests. Please use POST method with required fields: email, full_name, dob, front_image, back_image.'
+        ], 405);
+    }
+    return app(\App\Http\Controllers\Api\KycController::class)->submit($request);
+});
 Route::post('/submit_kyc', [KycController::class, 'submit']); // Alias
 Route::post('/kyc_get_status', [KycController::class, 'getStatus']);
 Route::post('/get_kyc_progress', [KycController::class, 'getProgress']);
+Route::post('/didit_create_request', [KycController::class, 'diditCreateRequest']);
 
 // News Routes
 Route::post('/get_all_news', [NewsController::class, 'getAllNews']);

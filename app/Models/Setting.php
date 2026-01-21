@@ -25,6 +25,7 @@ class Setting extends Model
         'rare_box_cooldown', 'rare_box_ads', 'rare_box_min_coins', 'rare_box_max_coins',
         'epic_box_cooldown', 'epic_box_ads', 'epic_box_min_coins', 'epic_box_max_coins',
         'legendary_box_cooldown', 'legendary_box_ads', 'legendary_box_min_coins', 'legendary_box_max_coins',
+        'legendary_box_reward_type', 'legendary_box_booster_types', 'legendary_box_booster_duration',
         'kyc_mining_sessions', 'kyc_referrals_required',
         'ad_waterfall_order', 'ad_waterfall_enabled'
     ];

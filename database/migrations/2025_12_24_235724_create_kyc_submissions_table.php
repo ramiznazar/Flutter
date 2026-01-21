@@ -16,8 +16,8 @@ return new class extends Migration
             $table->unsignedBigInteger('user_id')->nullable();
             $table->string('full_name', 255)->nullable();
             $table->date('dob')->nullable();
-            $table->text('front_image')->nullable();
-            $table->text('back_image')->nullable();
+            $table->longText('front_image')->nullable();
+            $table->longText('back_image')->nullable();
             $table->enum('status', ['pending', 'approved', 'rejected'])->default('pending')->nullable();
             $table->text('admin_notes')->nullable();
             $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade')->onUpdate('cascade');

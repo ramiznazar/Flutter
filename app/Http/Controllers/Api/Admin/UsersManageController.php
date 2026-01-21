@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\UserBooster;
+use App\Jobs\GiveCoinsToAllUsers;
+use App\Jobs\GiveBoosterToAllUsers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Carbon\Carbon;
@@ -75,30 +77,14 @@ class UsersManageController extends Controller
         $coinAmount = (float) $request->coin_amount;
 
         if ($targetType === 'all') {
-            // Give coins to all active users
-            $users = User::where('account_status', 'active')->get();
-            $successCount = 0;
-            $failedCount = 0;
-
-            foreach ($users as $user) {
-                $currentCoins = (float) $user->coin;
-                $newCoins = $currentCoins + $coinAmount;
-
-                // Only update if new coins won't be negative
-                if ($newCoins >= 0) {
-                    $user->update(['coin' => $newCoins]);
-                    $successCount++;
-                } else {
-                    $failedCount++;
-                }
-            }
+            // Dispatch job after response is sent to ensure immediate return
+            GiveCoinsToAllUsers::dispatchAfterResponse($coinAmount);
 
             return response()->json([
                 'success' => true,
-                'message' => "Coins updated for $successCount users. Amount: $coinAmount coins per user." . ($failedCount > 0 ? " $failedCount users were skipped due to insufficient balance." : ''),
-                'success_count' => $successCount,
-                'failed_count' => $failedCount,
-                'amount' => $coinAmount
+                'message' => "Coins distribution job has been queued. Amount: $coinAmount coins per user. The process will run in the background.",
+                'amount' => $coinAmount,
+                'queued' => true
             ]);
         } else {
             // Give coins to specific user
@@ -174,36 +160,16 @@ class UsersManageController extends Controller
         $expiresAt = $now->copy()->addSeconds($durationSeconds);
 
         if ($targetType === 'all') {
-            // Give booster to all active users
-            $users = User::where('account_status', 'active')->get();
-            $successCount = 0;
-
-            foreach ($users as $user) {
-                // Deactivate any expired boosters for this user
-                UserBooster::where('user_id', $user->id)
-                    ->where('expires_at', '<=', Carbon::now())
-                    ->update(['is_active' => 0]);
-
-                // Create new booster
-                UserBooster::create([
-                    'user_id' => $user->id,
-                    'booster_type' => $boosterType,
-                    'started_at' => $now,
-                    'expires_at' => $expiresAt,
-                    'is_active' => 1,
-                    'created_at' => $now
-                ]);
-
-                $successCount++;
-            }
+            // Dispatch job after response is sent to ensure immediate return
+            GiveBoosterToAllUsers::dispatchAfterResponse($boosterType, $expiresAt);
 
             return response()->json([
                 'success' => true,
-                'message' => "Booster assigned successfully to $successCount users.",
+                'message' => "Booster distribution job has been queued. The process will run in the background.",
                 'booster_type' => $boosterType,
                 'expires_at' => $expiresAt->format('Y-m-d H:i:s'),
                 'duration_hours' => $durationHours,
-                'users_affected' => $successCount
+                'queued' => true
             ]);
         } else {
             // Give booster to specific user

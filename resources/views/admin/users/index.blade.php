@@ -44,21 +44,29 @@
 
                     <div class="form-group mb-3">
                         <label class="mb-2">Amount (Coins)</label>
-                        <input type="number" step="0.01" class="form-control" name="coin_amount" required placeholder="Enter coin amount" value="{{ old('coin_amount') }}" />
-                        <small class="form-text text-muted">Use positive number to add, negative to remove coins.</small>
+                        <input type="number" step="0.01" class="form-control" name="coin_amount" required placeholder="Enter coin amount (e.g., 100 or -50)" value="{{ old('coin_amount') }}" />
+                        <small class="form-text text-muted">
+                            <strong>Add coins:</strong> Enter positive number (e.g., 100)<br>
+                            <strong>Remove coins:</strong> Enter negative number (e.g., -50)
+                        </small>
                         @error('coin_amount')
                             <div class="text-danger">{{ $message }}</div>
                         @enderror
                     </div>
 
                     <div class="form-group mb-0">
-                        <button type="submit" class="btn btn-primary waves-effect waves-light">
-                            Give Coins
+                        <button type="submit" class="btn btn-primary waves-effect waves-light" id="giveCoinsBtn">
+                            <span class="btn-text">Update Coins</span>
+                            <span class="btn-loading d-none">
+                                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                Processing...
+                            </span>
                         </button>
                         <button type="reset" class="btn btn-secondary waves-effect m-l-5" onclick="toggleCoinsUserField()">
                             Reset
                         </button>
                     </div>
+                    <div id="giveCoinsStatus" class="mt-2"></div>
                 </form>
 
             </div>
@@ -120,13 +128,18 @@
                     </div>
 
                     <div class="form-group mb-0">
-                        <button type="submit" class="btn btn-success waves-effect waves-light">
-                            Give Booster
+                        <button type="submit" class="btn btn-success waves-effect waves-light" id="giveBoosterBtn">
+                            <span class="btn-text">Give Booster</span>
+                            <span class="btn-loading d-none">
+                                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                Processing...
+                            </span>
                         </button>
                         <button type="reset" class="btn btn-secondary waves-effect m-l-5" onclick="toggleBoosterUserField()">
                             Reset
                         </button>
                     </div>
+                    <div id="giveBoosterStatus" class="mt-2"></div>
                 </form>
 
             </div>
@@ -386,25 +399,149 @@ document.addEventListener('DOMContentLoaded', function() {
     toggleCoinsUserField();
     toggleBoosterUserField();
     
-    // Add confirmation for "All Users" actions
+    // Give Coins Form - AJAX Submission
     document.getElementById('giveCoinsForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const form = this;
         const targetType = document.querySelector('input[name="target_type"]:checked').value;
+        const btn = document.getElementById('giveCoinsBtn');
+        const statusDiv = document.getElementById('giveCoinsStatus');
+        const btnText = btn.querySelector('.btn-text');
+        const btnLoading = btn.querySelector('.btn-loading');
+        
+        // Prepare form data
+        const formData = new FormData(form);
+        
+        // Get coin amount for confirmation message
+        const coinAmount = parseFloat(formData.get('coin_amount'));
+        const isNegative = coinAmount < 0;
+        
+        // Confirmation for "All Users"
         if (targetType === 'all') {
-            if (!confirm('Are you sure you want to give coins to ALL users? This action will affect all active users in the database.')) {
-                e.preventDefault();
+            const confirmMessage = isNegative 
+                ? `Are you sure you want to REMOVE ${Math.abs(coinAmount)} coins from ALL users? This action will affect all active users in the database.`
+                : `Are you sure you want to GIVE ${coinAmount} coins to ALL users? This action will affect all active users in the database.`;
+            
+            if (!confirm(confirmMessage)) {
                 return false;
             }
+        } else {
+            // Confirmation for specific user with negative amount
+            if (isNegative) {
+                if (!confirm(`Are you sure you want to REMOVE ${Math.abs(coinAmount)} coins from this user?`)) {
+                    return false;
+                }
+            }
         }
+        
+        // Show loading state
+        btn.disabled = true;
+        btnText.classList.add('d-none');
+        btnLoading.classList.remove('d-none');
+        statusDiv.innerHTML = '<div class="alert alert-info"><i class="fa fa-spinner fa-spin"></i> Processing request...</div>';
+        
+        // Submit via AJAX
+        fetch(form.action, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json'
+            }
+        })
+        .then(response => {
+            if (response.ok) {
+                return response.json();
+            }
+            throw new Error('Network response was not ok');
+        })
+        .then(data => {
+            if (data.success) {
+                statusDiv.innerHTML = '<div class="alert alert-success">' + data.message + '</div>';
+                // Reload page after 1 second to show the message in the session
+                setTimeout(() => {
+                    window.location.href = data.redirect || window.location.href;
+                }, 1000);
+            } else {
+                statusDiv.innerHTML = '<div class="alert alert-danger">' + (data.message || 'An error occurred') + '</div>';
+                btn.disabled = false;
+                btnText.classList.remove('d-none');
+                btnLoading.classList.add('d-none');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            statusDiv.innerHTML = '<div class="alert alert-danger">An error occurred. Please try again.</div>';
+            btn.disabled = false;
+            btnText.classList.remove('d-none');
+            btnLoading.classList.add('d-none');
+        });
     });
     
+    // Give Booster Form - AJAX Submission
     document.getElementById('giveBoosterForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const form = this;
         const targetType = document.querySelector('input[name="booster_target_type"]:checked').value;
+        const btn = document.getElementById('giveBoosterBtn');
+        const statusDiv = document.getElementById('giveBoosterStatus');
+        const btnText = btn.querySelector('.btn-text');
+        const btnLoading = btn.querySelector('.btn-loading');
+        
+        // Confirmation for "All Users"
         if (targetType === 'all') {
             if (!confirm('Are you sure you want to give boosters to ALL users? This action will affect all active users in the database.')) {
-                e.preventDefault();
                 return false;
             }
         }
+        
+        // Show loading state
+        btn.disabled = true;
+        btnText.classList.add('d-none');
+        btnLoading.classList.remove('d-none');
+        statusDiv.innerHTML = '<div class="alert alert-info"><i class="fa fa-spinner fa-spin"></i> Processing request...</div>';
+        
+        // Prepare form data
+        const formData = new FormData(form);
+        
+        // Submit via AJAX
+        fetch(form.action, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json'
+            }
+        })
+        .then(response => {
+            if (response.ok) {
+                return response.json();
+            }
+            throw new Error('Network response was not ok');
+        })
+        .then(data => {
+            if (data.success) {
+                statusDiv.innerHTML = '<div class="alert alert-success">' + data.message + '</div>';
+                // Reload page after 1 second to show the message in the session
+                setTimeout(() => {
+                    window.location.href = data.redirect || window.location.href;
+                }, 1000);
+            } else {
+                statusDiv.innerHTML = '<div class="alert alert-danger">' + (data.message || 'An error occurred') + '</div>';
+                btn.disabled = false;
+                btnText.classList.remove('d-none');
+                btnLoading.classList.add('d-none');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            statusDiv.innerHTML = '<div class="alert alert-danger">An error occurred. Please try again.</div>';
+            btn.disabled = false;
+            btnText.classList.remove('d-none');
+            btnLoading.classList.add('d-none');
+        });
     });
 });
 </script>

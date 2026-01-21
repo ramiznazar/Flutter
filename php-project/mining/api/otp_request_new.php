@@ -14,15 +14,16 @@ if (!isset($input['email']) || !filter_var($input['email'], FILTER_VALIDATE_EMAI
 
 $email = $input['email'];
 
-// Check if email exists and account status is active
-$query = "SELECT * FROM users WHERE email = ? AND account_status = 'unverified'";
+// Check if email exists (for both unverified and active accounts)
+// This endpoint is used for both account verification and password reset
+$query = "SELECT * FROM users WHERE email = ? AND (account_status = 'unverified' OR account_status = 'active')";
 $stmt = $conn->prepare($query);
 $stmt->bind_param('s', $email);
 $stmt->execute();
 $result = $stmt->get_result();
 
 if ($result->num_rows === 0) {
-    echo json_encode(array('success' => false, 'message' => 'Email not found or account is already verified.'));
+    echo json_encode(array('success' => false, 'message' => 'Email not found.'));
     exit();
 }
 
