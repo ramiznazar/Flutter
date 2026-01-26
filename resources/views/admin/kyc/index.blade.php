@@ -13,8 +13,39 @@
     <div class="col-lg-12">
         <div class="card">
             <div class="card-body">
-                <h4 class="mt-0 header-title">KYC Submissions</h4>
-                <p class="text-muted mb-4 font-14">Review and manage KYC submissions from users.</p>
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div>
+                        <h4 class="mt-0 header-title">KYC Submissions</h4>
+                        <p class="text-muted mb-0 font-14">Review and manage KYC submissions from users.</p>
+                    </div>
+                    <div>
+                        @php
+                            $pendingCount = \App\Models\KycSubmission::where('status', 'pending')->count();
+                        @endphp
+                        @if($pendingCount > 0)
+                        <form action="{{ route('admin.kyc.bulk-accept') }}" method="POST" class="d-inline" onsubmit="return confirm('Are you sure you want to approve all {{ $pendingCount }} pending KYC submission(s)?');">
+                            @csrf
+                            <input type="hidden" name="confirm" value="yes">
+                            <button type="submit" class="btn btn-success waves-effect waves-light btn-lg">
+                                <i class="mdi mdi-check-all"></i> Accept All Pending ({{ $pendingCount }})
+                            </button>
+                        </form>
+                        @else
+                        <button type="button" class="btn btn-secondary waves-effect waves-light btn-lg" disabled>
+                            <i class="mdi mdi-check-all"></i> No Pending Submissions
+                        </button>
+                        @endif
+                    </div>
+                </div>
+                
+                @if(session('message'))
+                <div class="alert alert-{{ session('messageType') === 'success' ? 'success' : 'danger' }} alert-dismissible fade show" role="alert">
+                    {{ session('message') }}
+                    <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                @endif
 
                 <div class="table-responsive">
                     <table class="table table-hover">
@@ -28,7 +59,6 @@
                                 <th>Front Image</th>
                                 <th>Back Image</th>
                                 <th>Status</th>
-                                <th>Didit Status</th>
                                 <th>Submitted At</th>
                                 <th>Actions</th>
                             </tr>
@@ -44,15 +74,6 @@
                                 <td><a href="{{ $kyc['front_image'] }}" target="_blank" class="btn btn-sm btn-info">View</a></td>
                                 <td><a href="{{ $kyc['back_image'] }}" target="_blank" class="btn btn-sm btn-info">View</a></td>
                                 <td><span class="badge badge-{{ $kyc['status'] === 'approved' ? 'success' : ($kyc['status'] === 'rejected' ? 'danger' : 'warning') }}">{{ ucfirst($kyc['status']) }}</span></td>
-                                <td>
-                                    @if($kyc['didit_status'])
-                                        <span class="badge badge-{{ $kyc['didit_status'] === 'APPROVED' ? 'success' : ($kyc['didit_status'] === 'DECLINED' ? 'danger' : 'warning') }}">
-                                            {{ $kyc['didit_status'] }}
-                                        </span>
-                                    @else
-                                        <span class="badge badge-secondary">N/A</span>
-                                    @endif
-                                </td>
                                 <td>{{ \Carbon\Carbon::parse($kyc['created_at'])->format('Y-m-d H:i') }}</td>
                                 <td>
                                     <a href="{{ route('admin.kyc.index', ['edit_id' => $kyc['id']]) }}" class="btn btn-sm btn-primary">View/Edit</a>
@@ -60,7 +81,7 @@
                             </tr>
                             @empty
                             <tr>
-                                <td colspan="11" class="text-center">No KYC submissions found.</td>
+                                <td colspan="10" class="text-center">No KYC submissions found.</td>
                             </tr>
                             @endforelse
                         </tbody>
@@ -191,13 +212,10 @@
                     
                     <div class="form-group">
                         <label>Status</label>
-                        @if($editKYC->didit_status)
-                            <div class="alert alert-info mb-2" style="font-size: 12px;">
-                                <i class="mdi mdi-information"></i> 
-                                <strong>Auto-synced:</strong> Status automatically follows Didit status. 
-                                You can manually override it below if needed.
-                            </div>
-                        @endif
+                        <div class="alert alert-info mb-2" style="font-size: 12px;">
+                            <i class="mdi mdi-information"></i> 
+                            <strong>Manual Review:</strong> Review the uploaded documents and set the status accordingly.
+                        </div>
                         <select class="form-control" name="status" required>
                             <option value="pending" {{ $editKYC->status === 'pending' ? 'selected' : '' }}>Pending</option>
                             <option value="approved" {{ $editKYC->status === 'approved' ? 'selected' : '' }}>Approved</option>
@@ -207,28 +225,6 @@
                             <div class="text-danger">{{ $message }}</div>
                         @enderror
                     </div>
-                    
-                    @if($editKYC->didit_request_id)
-                    <div class="form-group">
-                        <label>Didit Verification Status</label>
-                        <div class="alert alert-info">
-                            <strong>Didit Request ID:</strong> {{ $editKYC->didit_request_id }}<br>
-                            <strong>Didit Status:</strong> 
-                            <span class="badge badge-{{ $editKYC->didit_status === 'APPROVED' ? 'success' : ($editKYC->didit_status === 'DECLINED' ? 'danger' : 'warning') }}">
-                                {{ $editKYC->didit_status ?? 'Pending' }}
-                            </span><br>
-                            @if($editKYC->didit_verified_at)
-                            <strong>Verified At:</strong> {{ \Carbon\Carbon::parse($editKYC->didit_verified_at)->format('Y-m-d H:i:s') }}
-                            @endif
-                        </div>
-                        @if($editKYC->didit_verification_data)
-                        <details class="mt-2">
-                            <summary class="btn btn-sm btn-secondary">View Didit Verification Data</summary>
-                            <pre class="mt-2 p-2 bg-light" style="max-height: 200px; overflow-y: auto;">{{ json_encode(json_decode($editKYC->didit_verification_data), JSON_PRETTY_PRINT) }}</pre>
-                        </details>
-                        @endif
-                    </div>
-                    @endif
                     
                     <div class="form-group">
                         <label>Admin Notes</label>

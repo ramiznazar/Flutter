@@ -126,181 +126,61 @@ class KycController extends Controller
             ], 400);
         }
 
-        // Convert base64 images to temporary files for Didit API
-        $frontImagePath = $this->base64ToTempFile($request->front_image, 'kyc_front_');
-        $backImagePath = $this->base64ToTempFile($request->back_image, 'kyc_back_');
+        // Validate base64 images (no Didit API call - manual admin review)
+        // Check if images are valid base64 strings
+        $frontImageData = $request->front_image;
+        $backImageData = $request->back_image;
         
-        if (!$frontImagePath || !$backImagePath) {
+        // Remove data URI prefix if present
+        if (strpos($frontImageData, ',') !== false) {
+            $frontImageData = explode(',', $frontImageData)[1];
+        }
+        if (strpos($backImageData, ',') !== false) {
+            $backImageData = explode(',', $backImageData)[1];
+        }
+        
+        // Validate base64
+        if (!base64_decode($frontImageData, true)) {
             return response()->json([
                 'success' => false,
-                'message' => 'Invalid image format. Please provide valid base64 encoded images.'
+                'message' => 'Invalid front image format. Please provide valid base64 encoded image.'
+            ], 400);
+        }
+        
+        if (!base64_decode($backImageData, true)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid back image format. Please provide valid base64 encoded image.'
             ], 400);
         }
 
-        // Verify ID with Didit API (using email as vendor_data to match with user)
-        $diditResult = $this->verifyWithDidit($frontImagePath, $backImagePath, $user->email);
-        
-        // Clean up temporary files
-        @unlink($frontImagePath);
-        @unlink($backImagePath);
-        
-        $diditRequestId = null;
-        $diditStatus = null;
-        $diditVerificationData = null;
-        $diditVerifiedAt = null;
-        $kycStatus = 'pending';
-        
-        if ($diditResult['success'] && isset($diditResult['data'])) {
-            $diditData = $diditResult['data'];
-            $diditRequestId = $diditData['request_id'] ?? null;
-            
-            if (isset($diditData['id_verification'])) {
-                $idVerification = $diditData['id_verification'];
-                $diditStatus = $idVerification['status'] ?? null;
-                $diditVerificationData = json_encode($diditData, JSON_UNESCAPED_UNICODE);
-                $diditVerifiedAt = now();
-                
-                // If Didit approves, set status to pending (admin can still review)
-                // If Didit declines, set status to pending but admin will see the decline reason
-                // Admin can override the status later
-            }
-        } else {
-            // If Didit verification fails, still save the submission but mark it
-            $diditVerificationData = json_encode([
-                'error' => $diditResult['error'] ?? 'Verification failed',
-                'details' => $diditResult['details'] ?? null
-            ], JSON_UNESCAPED_UNICODE);
-        }
-
-        // Create KYC submission with Didit verification data
+        // Create KYC submission - status will be 'pending' for admin review
+        // No Didit API integration - admin will manually review and approve/reject
         $kyc = KycSubmission::create([
             'user_id' => $user->id,
             'full_name' => $request->full_name,
             'dob' => $request->dob,
             'front_image' => $request->front_image,
             'back_image' => $request->back_image,
-            'status' => $kycStatus,
-            'didit_request_id' => $diditRequestId,
-            'didit_status' => $diditStatus,
-            'didit_verification_data' => $diditVerificationData,
-            'didit_verified_at' => $diditVerifiedAt,
+            'status' => 'pending', // Always pending - admin will review manually
+            'didit_request_id' => null,
+            'didit_status' => null,
+            'didit_verification_data' => null,
+            'didit_verified_at' => null,
         ]);
 
         return response()->json([
             'success' => true,
-            'message' => $diditResult['success'] ? 'KYC submitted and verified successfully.' : 'KYC submitted successfully. Verification pending.',
+            'message' => 'KYC submitted successfully. Your submission is pending admin review.',
             'data' => [
                 'kyc_id' => $kyc->id,
                 'status' => $kyc->status,
-                'didit_request_id' => $diditRequestId,
-                'verification_status' => $diditStatus,
+                'didit_request_id' => null,
+                'verification_status' => null,
             ]
         ]);
     }
 
-    /**
-     * Convert base64 image to temporary file
-     */
-    private function base64ToTempFile($base64String, $prefix = 'kyc_')
-    {
-        // Remove data URI prefix if present
-        if (strpos($base64String, ',') !== false) {
-            $base64String = explode(',', $base64String)[1];
-        }
-        
-        $imageData = base64_decode($base64String);
-        if ($imageData === false) {
-            return false;
-        }
-        
-        $tempFile = tempnam(sys_get_temp_dir(), $prefix);
-        file_put_contents($tempFile, $imageData);
-        return $tempFile;
-    }
-
-    /**
-     * Verify ID with Didit API
-     */
-    private function verifyWithDidit($frontImagePath, $backImagePath, $userEmail)
-    {
-        // Didit API Configuration
-        $apiKey = '7wk_58gFnb27uqgApuMlEcpASwUurvX8IP6cKAZc4P4';
-        $appId = 'ea69c49c-e8f0-4c64-aa9c-6a3cfa636232';
-        $apiUrl = 'https://verification.didit.me/v2/id-verification/';
-        
-        try {
-            // Create multipart form data using Guzzle HTTP client directly
-            $client = new \GuzzleHttp\Client([
-                'timeout' => 30.0,
-                'verify' => true
-            ]);
-            
-            $response = $client->request('POST', $apiUrl, [
-                'headers' => [
-                    'x-api-key' => $apiKey,
-                    'accept' => 'application/json',
-                ],
-                'multipart' => [
-                    [
-                        'name' => 'front_image',
-                        'contents' => fopen($frontImagePath, 'r'),
-                        'filename' => 'front.jpg'
-                    ],
-                    [
-                        'name' => 'back_image',
-                        'contents' => fopen($backImagePath, 'r'),
-                        'filename' => 'back.jpg'
-                    ],
-                    [
-                        'name' => 'vendor_data',
-                        'contents' => $userEmail
-                    ],
-                    [
-                        'name' => 'app_id',
-                        'contents' => $appId
-                    ],
-                    [
-                        'name' => 'perform_document_liveness',
-                        'contents' => 'true'
-                    ],
-                    [
-                        'name' => 'expiration_date_not_detected_action',
-                        'contents' => 'DECLINE'
-                    ],
-                    [
-                        'name' => 'invalid_mrz_action',
-                        'contents' => 'DECLINE'
-                    ],
-                    [
-                        'name' => 'inconsistent_data_action',
-                        'contents' => 'DECLINE'
-                    ]
-                ]
-            ]);
-            
-            $responseBody = json_decode($response->getBody()->getContents(), true);
-            
-            return [
-                'success' => true,
-                'data' => $responseBody
-            ];
-            
-        } catch (\GuzzleHttp\Exception\RequestException $e) {
-            $errorResponse = $e->getResponse();
-            $errorBody = $errorResponse ? json_decode($errorResponse->getBody()->getContents(), true) : null;
-            
-            return [
-                'success' => false,
-                'error' => $e->getMessage(),
-                'details' => $errorBody
-            ];
-        } catch (\Exception $e) {
-            return [
-                'success' => false,
-                'error' => $e->getMessage()
-            ];
-        }
-    }
 
     public function getStatus(Request $request)
     {

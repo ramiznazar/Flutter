@@ -198,6 +198,29 @@ class MysteryBoxController extends Controller
         
         $boxType = $request->box_type;
         
+        $now = Carbon::now();
+        $twentyFourHoursAgo = $now->copy()->subHours(24);
+        
+        // Check if user opened this box type within last 24 hours
+        $recentlyOpened = MysteryBoxClaim::where('user_id', $user->id)
+            ->where('box_type', $boxType)
+            ->where('box_opened', 1)
+            ->where('opened_at', '>=', $twentyFourHoursAgo)
+            ->orderBy('opened_at', 'desc')
+            ->first();
+
+        if ($recentlyOpened) {
+            $nextAvailableAt = Carbon::parse($recentlyOpened->opened_at)->addHours(24);
+            $secondsUntilAvailable = $now->diffInSeconds($nextAvailableAt);
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Box already opened. Available again in 24 hours.',
+                'next_available_at' => $nextAvailableAt->format('Y-m-d H:i:s'),
+                'seconds_until_available' => $secondsUntilAvailable
+            ], 400);
+        }
+        
         $claim = MysteryBoxClaim::where('user_id', $user->id)
             ->where('box_type', $boxType)
             ->where('box_opened', 0)
@@ -291,7 +314,14 @@ class MysteryBoxController extends Controller
                     'opened_at' => $now
                 ]);
 
+                // Add coins to mining balance (token)
                 $user->increment('token', $rewardCoins);
+                
+                // If mining is active, adjust mining_start_balance so balance calculation continues correctly
+                if ($user->is_mining == 1 && $user->mining_start_balance !== null) {
+                    $user->increment('mining_start_balance', $rewardCoins);
+                }
+                
                 $user->refresh();
 
                 DB::commit();
@@ -301,7 +331,8 @@ class MysteryBoxController extends Controller
                     'message' => 'Box opened successfully',
                     'reward_type' => 'coins',
                     'reward_coins' => $rewardCoins,
-                    'new_balance' => (float) $user->token
+                    'new_balance' => (float) $user->token,
+                    'is_mining_active' => $user->is_mining == 1
                 ]);
             }
         } catch (\Exception $e) {

@@ -122,7 +122,21 @@ class UsersManageController extends Controller
                 ], 400);
             }
 
-            $user->update(['coin' => $newCoins]);
+            // Update both coin (spending currency) and token (mining balance)
+            $currentToken = (float) $user->token;
+            $newToken = $currentToken + $coinAmount;
+            
+            // If user is mining, also adjust mining_start_balance to maintain accuracy
+            $updateData = [
+                'coin' => $newCoins,
+                'token' => $newToken
+            ];
+            
+            if ($user->is_mining == 1 && $user->mining_start_balance !== null) {
+                $updateData['mining_start_balance'] = (float) $user->mining_start_balance + $coinAmount;
+            }
+            
+            $user->update($updateData);
 
             return response()->json([
                 'success' => true,

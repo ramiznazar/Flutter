@@ -39,7 +39,8 @@ class User extends Model
         'is_mining', 'mining_end_time', 'coin_end_time', 'total_coin_claim',
         'last_active', 'mining_time', 'username', 'username_count',
         'total_invite', 'invite_setup', 'account_status', 'ban_reason',
-        'ban_date', 'otp', 'join_date', 'custom_coin_speed', 'auth_token'
+        'ban_date', 'otp', 'join_date', 'custom_coin_speed', 'auth_token',
+        'mining_start_balance'
     ];
 
     protected $hidden = [

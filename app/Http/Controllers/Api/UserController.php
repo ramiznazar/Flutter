@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Models\UserLevel;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Carbon\Carbon;
 
 class UserController extends Controller
 {
@@ -181,13 +182,59 @@ class UserController extends Controller
         // Get users referred by this user (users with invite_setup matching this user's id or username)
         $referrals = User::where('invite_setup', $user->id)
             ->orWhere('invite_setup', $user->username)
-            ->get(['id', 'name', 'email', 'total_invite', 'join_date']);
+            ->get();
+
+        $now = Carbon::now();
+        $twelveHoursAgo = $now->copy()->subHours(12);
+
+        // Format referrals with ping status and additional info
+        $formattedReferrals = $referrals->map(function($referral) use ($now, $twelveHoursAgo) {
+            $lastActive = $referral->last_active ? Carbon::parse($referral->last_active) : null;
+            $isPingAvailable = false;
+            
+            if ($lastActive) {
+                // Ping is available if user was active within last 12 hours
+                $isPingAvailable = $lastActive->gte($twelveHoursAgo);
+            }
+            
+            // Check if user is currently mining
+            $isMining = false;
+            if ($referral->is_mining == 1 && $referral->mining_end_time) {
+                try {
+                    $miningEndTime = Carbon::createFromFormat('Y-m-d-H:i:s', $referral->mining_end_time);
+                    $isMining = $now->lt($miningEndTime);
+                } catch (\Exception $e) {
+                    // Try alternative format
+                    try {
+                        $miningEndTime = Carbon::parse($referral->mining_end_time);
+                        $isMining = $now->lt($miningEndTime);
+                    } catch (\Exception $e2) {
+                        $isMining = false;
+                    }
+                }
+            }
+
+            return [
+                'id' => $referral->id,
+                'user_id' => 'USR' . str_pad($referral->id, 6, '0', STR_PAD_LEFT),
+                'name' => $referral->name,
+                'email' => $referral->email,
+                'username' => $referral->username ?? 'N/A',
+                'token' => (float) $referral->token,
+                'total_invite' => (int) $referral->total_invite,
+                'join_date' => $referral->join_date,
+                'last_active' => $referral->last_active,
+                'is_mining' => $isMining,
+                'is_ping_available' => $isPingAvailable,
+                'profile_url' => $referral->ban_reason ?? null // Using ban_reason field for profile_url (legacy)
+            ];
+        });
 
         return response()->json([
             'success' => true,
             'data' => [
                 'total_referrals' => $user->total_invite,
-                'referrals' => $referrals
+                'referrals' => $formattedReferrals
             ]
         ]);
     }
@@ -214,13 +261,114 @@ class UserController extends Controller
             ], 404);
         }
 
-        $userLevel = UserLevel::where('user_id', $user->id)
-            ->with('level')
-            ->first();
+        // Get user level data
+        $userLevel = UserLevel::where('user_id', $user->id)->first();
+        $currentLevelId = $userLevel ? (int) $userLevel->current_level : 1;
+        
+        // Get user stats
+        $miningSessions = $userLevel ? (int) $userLevel->mining_session : 0;
+        $totalInvite = (int) $user->total_invite;
+        $accountAgeDays = $user->join_date ? \Carbon\Carbon::parse($user->join_date)->diffInDays(\Carbon\Carbon::now()) : 0;
+        
+        // Get all levels
+        $allLevels = \App\Models\Level::orderBy('id', 'asc')->get();
+        
+        // Get current level
+        $currentLevel = $allLevels->firstWhere('id', $currentLevelId);
+        if (!$currentLevel) {
+            $currentLevel = $allLevels->first();
+            $currentLevelId = $currentLevel ? $currentLevel->id : 1;
+        }
+        
+        // Get next level
+        $nextLevel = $allLevels->firstWhere('id', $currentLevelId + 1);
+        
+        // Format current level perks (exclude spin wheel)
+        $currentLevelPerks = [];
+        if ($currentLevel) {
+            $currentLevelPerks = [
+                'crutox_per_time' => (float) $currentLevel->perk_crutox_per_time,
+                'mining_time_hours' => (int) $currentLevel->perk_mining_time,
+                'crutox_reward' => (float) $currentLevel->perk_crutox_reward,
+                'other_access' => $currentLevel->perk_other_access,
+                'is_ads_block' => (bool) $currentLevel->is_ads_block
+            ];
+        }
+        
+        // Format next level requirements with progress
+        $nextLevelRequirements = null;
+        if ($nextLevel) {
+            $nextLevelRequirements = [
+                'mining_sessions' => [
+                    'required' => (int) $nextLevel->mining_sessions,
+                    'current' => $miningSessions,
+                    'progress' => $miningSessions . '/' . (int) $nextLevel->mining_sessions,
+                    'completed' => $miningSessions >= (int) $nextLevel->mining_sessions
+                ],
+                'total_invite' => [
+                    'required' => (int) $nextLevel->total_invite,
+                    'current' => $totalInvite,
+                    'progress' => $totalInvite . '/' . (int) $nextLevel->total_invite,
+                    'completed' => $totalInvite >= (int) $nextLevel->total_invite
+                ],
+                'account_age_days' => [
+                    'required' => (int) $nextLevel->user_account_old,
+                    'current' => $accountAgeDays,
+                    'progress' => $accountAgeDays . '/' . (int) $nextLevel->user_account_old,
+                    'completed' => $accountAgeDays >= (int) $nextLevel->user_account_old
+                ]
+            ];
+        }
+        
+        // Format all levels data
+        $levelsData = [];
+        foreach ($allLevels as $level) {
+            $levelsData[] = [
+                'id' => $level->id,
+                'name' => $level->lvl_name,
+                'requirements' => [
+                    'mining_sessions' => (int) $level->mining_sessions,
+                    'total_invite' => (int) $level->total_invite,
+                    'account_age_days' => (int) $level->user_account_old
+                ],
+                'perks' => [
+                    'crutox_per_time' => (float) $level->perk_crutox_per_time,
+                    'mining_time_hours' => (int) $level->perk_mining_time,
+                    'crutox_reward' => (float) $level->perk_crutox_reward,
+                    'other_access' => $level->perk_other_access,
+                    'is_ads_block' => (bool) $level->is_ads_block
+                ],
+                'is_current' => $level->id == $currentLevelId
+            ];
+        }
 
         return response()->json([
             'success' => true,
-            'data' => $userLevel
+            'data' => [
+                'current_level' => [
+                    'id' => $currentLevelId,
+                    'name' => $currentLevel ? $currentLevel->lvl_name : 'Novice',
+                    'perks' => $currentLevelPerks
+                ],
+                'next_level' => $nextLevel ? [
+                    'id' => $nextLevel->id,
+                    'name' => $nextLevel->lvl_name,
+                    'requirements' => $nextLevelRequirements,
+                    'perks' => [
+                        'crutox_per_time' => (float) $nextLevel->perk_crutox_per_time,
+                        'mining_time_hours' => (int) $nextLevel->perk_mining_time,
+                        'crutox_reward' => (float) $nextLevel->perk_crutox_reward,
+                        'other_access' => $nextLevel->perk_other_access,
+                        'is_ads_block' => (bool) $nextLevel->is_ads_block
+                    ]
+                ] : null,
+                'all_levels' => $levelsData,
+                'user_stats' => [
+                    'mining_sessions' => $miningSessions,
+                    'total_invite' => $totalInvite,
+                    'account_age_days' => $accountAgeDays
+                ]
+            ]
         ]);
     }
 
@@ -519,13 +667,24 @@ class UserController extends Controller
             // Update user's invite setup with referrer's user_id
             $user->update(['invite_setup' => $referrer->id]);
 
-            // Increment referrer's total_invite and add reward
+            // Increment referrer's total_invite and add reward (2 coins)
             $referrer->increment('total_invite');
-            $referrer->increment('token', 0.5);
+            
+            // Give 2 coins to referrer
+            $referrerReward = 2.0;
+            $referrer->increment('token', $referrerReward);
+            
+            // If referrer is mining, adjust mining_start_balance
+            if ($referrer->is_mining == 1 && $referrer->mining_start_balance !== null) {
+                $referrer->increment('mining_start_balance', $referrerReward);
+            }
+            
+            $referrer->refresh();
 
             return response()->json([
                 'success' => true,
-                'message' => 'Username successfully setup.'
+                'message' => 'Username successfully setup.',
+                'referrer_reward' => $referrerReward
             ]);
         }
 

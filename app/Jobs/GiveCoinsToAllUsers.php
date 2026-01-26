@@ -53,7 +53,25 @@ class GiveCoinsToAllUsers implements ShouldQueue
                     ->pluck('coin', 'id')
                     ->toArray();
                 
+                // Get current token values for users
+                $currentTokens = DB::table('users')
+                    ->whereIn('id', $userIds)
+                    ->pluck('token', 'id')
+                    ->toArray();
+                
+                // Get mining status for users
+                $miningUsers = DB::table('users')
+                    ->whereIn('id', $userIds)
+                    ->where('is_mining', 1)
+                    ->whereNotNull('mining_start_balance')
+                    ->pluck('mining_start_balance', 'id')
+                    ->toArray();
+                
                 // Prepare updates for users where new coins >= 0
+                $coinUpdates = [];
+                $tokenUpdates = [];
+                $miningBalanceUpdates = [];
+                
                 foreach ($users as $user) {
                     try {
                         $currentCoin = (float) ($currentCoins[$user->id] ?? 0);
@@ -61,7 +79,16 @@ class GiveCoinsToAllUsers implements ShouldQueue
 
                         // Only update if new coins won't be negative
                         if ($newCoins >= 0) {
-                            $updates[$user->id] = $newCoins;
+                            $coinUpdates[$user->id] = $newCoins;
+                            
+                            // Also update token (mining balance)
+                            $currentToken = (float) ($currentTokens[$user->id] ?? 0);
+                            $tokenUpdates[$user->id] = $currentToken + $this->coinAmount;
+                            
+                            // If user is mining, also update mining_start_balance
+                            if (isset($miningUsers[$user->id])) {
+                                $miningBalanceUpdates[$user->id] = (float) $miningUsers[$user->id] + $this->coinAmount;
+                            }
                         } else {
                             $failedCount++;
                         }
@@ -72,31 +99,54 @@ class GiveCoinsToAllUsers implements ShouldQueue
                 }
                 
                 // Perform bulk updates using CASE statement for maximum speed
-                if (!empty($updates)) {
+                if (!empty($coinUpdates)) {
                     try {
                         DB::beginTransaction();
                         
                         // Update in batches to avoid query size limits
-                        $updateChunks = array_chunk($updates, 200, true);
+                        $updateChunks = array_chunk($coinUpdates, 200, true);
                         foreach ($updateChunks as $chunk) {
-                            // Build CASE statement for this chunk
-                            $caseStatements = [];
+                            // Build CASE statement for coin updates
+                            $coinCaseStatements = [];
+                            $tokenCaseStatements = [];
                             $userIds = [];
                             
                             foreach ($chunk as $userId => $newCoins) {
-                                $caseStatements[] = "WHEN " . (int)$userId . " THEN " . (float)$newCoins;
+                                $coinCaseStatements[] = "WHEN " . (int)$userId . " THEN " . (float)$newCoins;
+                                $tokenCaseStatements[] = "WHEN " . (int)$userId . " THEN " . (float)$tokenUpdates[$userId];
                                 $userIds[] = (int)$userId;
                             }
                             
-                            if (!empty($caseStatements)) {
-                                $caseSql = "CASE id " . implode(' ', $caseStatements) . " END";
+                            if (!empty($coinCaseStatements)) {
+                                $coinCaseSql = "CASE id " . implode(' ', $coinCaseStatements) . " END";
+                                $tokenCaseSql = "CASE id " . implode(' ', $tokenCaseStatements) . " END";
                                 $ids = implode(',', $userIds);
-                                DB::statement("UPDATE users SET coin = {$caseSql} WHERE id IN ({$ids})");
+                                DB::statement("UPDATE users SET coin = {$coinCaseSql}, token = {$tokenCaseSql} WHERE id IN ({$ids})");
+                            }
+                        }
+                        
+                        // Update mining_start_balance for mining users
+                        if (!empty($miningBalanceUpdates)) {
+                            $miningChunks = array_chunk($miningBalanceUpdates, 200, true);
+                            foreach ($miningChunks as $chunk) {
+                                $miningCaseStatements = [];
+                                $userIds = [];
+                                
+                                foreach ($chunk as $userId => $newBalance) {
+                                    $miningCaseStatements[] = "WHEN " . (int)$userId . " THEN " . (float)$newBalance;
+                                    $userIds[] = (int)$userId;
+                                }
+                                
+                                if (!empty($miningCaseStatements)) {
+                                    $miningCaseSql = "CASE id " . implode(' ', $miningCaseStatements) . " END";
+                                    $ids = implode(',', $userIds);
+                                    DB::statement("UPDATE users SET mining_start_balance = {$miningCaseSql} WHERE id IN ({$ids}) AND is_mining = 1");
+                                }
                             }
                         }
                         
                         DB::commit();
-                        $successCount += count($updates);
+                        $successCount += count($coinUpdates);
                     } catch (\Exception $e) {
                         DB::rollBack();
                         Log::error("Error in bulk coin update: " . $e->getMessage() . " | Trace: " . $e->getTraceAsString());

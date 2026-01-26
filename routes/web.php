@@ -67,6 +67,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         // KYC Management
         Route::get('/kyc', [\App\Http\Controllers\Admin\KycViewController::class, 'index'])->name('kyc.index');
         Route::post('/kyc/update-status', [\App\Http\Controllers\Admin\KycViewController::class, 'updateStatus'])->name('kyc.update-status');
+        Route::post('/kyc/bulk-accept', [\App\Http\Controllers\Admin\KycViewController::class, 'bulkAccept'])->name('kyc.bulk-accept');
         
         // Badges Management
         Route::get('/badges', [\App\Http\Controllers\Admin\BadgeViewController::class, 'index'])->name('badges.index');

@@ -95,23 +95,37 @@ class TaskController extends Controller
             }
         }
 
-        // For daily tasks, check if user already completed today
+        // For daily tasks, check if user already completed within last 24 hours
         if ($request->task_type === 'daily') {
-            $settings = Setting::first();
-            $resetTime = $settings ? $settings->daily_tasks_reset_time : null;
+            $now = Carbon::now();
+            $twentyFourHoursAgo = $now->copy()->subHours(24);
+            
+            // Check if user claimed this task within last 24 hours
+            $alreadyCompleted = TaskCompletion::where('user_id', $user->id)
+                ->where('task_id', $request->task_id)
+                ->where('task_type', 'daily')
+                ->where('reward_claimed', 1)
+                ->where('reward_claimed_at', '>=', $twentyFourHoursAgo)
+                ->exists();
 
-            if ($resetTime) {
-                $alreadyCompleted = TaskCompletion::where('user_id', $user->id)
+            if ($alreadyCompleted) {
+                // Get the last claim time to show when it will be available again
+                $lastClaim = TaskCompletion::where('user_id', $user->id)
                     ->where('task_id', $request->task_id)
                     ->where('task_type', 'daily')
-                    ->where('started_at', '>=', $resetTime)
                     ->where('reward_claimed', 1)
-                    ->exists();
-
-                if ($alreadyCompleted) {
+                    ->orderBy('reward_claimed_at', 'desc')
+                    ->first();
+                
+                if ($lastClaim) {
+                    $nextAvailableAt = Carbon::parse($lastClaim->reward_claimed_at)->addHours(24);
+                    $secondsUntilAvailable = $now->diffInSeconds($nextAvailableAt);
+                    
                     return response()->json([
                         'success' => false,
-                        'message' => 'Daily task already completed today'
+                        'message' => 'Daily task already completed. Available again in 24 hours.',
+                        'next_available_at' => $nextAvailableAt->format('Y-m-d H:i:s'),
+                        'seconds_until_available' => $secondsUntilAvailable
                     ], 400);
                 }
             }
@@ -232,7 +246,14 @@ class TaskController extends Controller
                 'reward_claimed_at' => $now
             ]);
 
+            // Add coins to mining balance (token)
             $user->increment('token', $reward);
+            
+            // If mining is active, adjust mining_start_balance so balance calculation continues correctly
+            if ($user->is_mining == 1 && $user->mining_start_balance !== null) {
+                $user->increment('mining_start_balance', $reward);
+            }
+            
             $user->refresh();
 
             DB::commit();
@@ -241,7 +262,8 @@ class TaskController extends Controller
                 'success' => true,
                 'message' => 'Reward claimed successfully',
                 'reward' => $reward,
-                'new_balance' => (float) $user->token
+                'new_balance' => (float) $user->token,
+                'is_mining_active' => $user->is_mining == 1
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
@@ -322,6 +344,115 @@ class TaskController extends Controller
             'action' => $action,
             'task_id' => $request->task_id,
             'task_type' => $request->task_type
+        ]);
+    }
+
+    /**
+     * Get daily tasks list with user's claim status
+     */
+    public function getDailyTasks(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'email' => 'required|email',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Email is required'
+            ], 400);
+        }
+
+        $user = User::where('email', $request->email)
+            ->where('account_status', 'active')
+            ->first();
+
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'User not found or account not active'
+            ], 404);
+        }
+
+        // Get daily tasks (first 3 tasks)
+        $tasks = SocialMediaSetting::orderBy('ID', 'asc')
+            ->limit(3)
+            ->get();
+
+        $now = Carbon::now();
+        $twentyFourHoursAgo = $now->copy()->subHours(24);
+
+        // Get user's task completions
+        $completions = TaskCompletion::where('user_id', $user->id)
+            ->where('task_type', 'daily')
+            ->whereIn('task_id', $tasks->pluck('ID'))
+            ->where('reward_claimed', 1)
+            ->where('reward_claimed_at', '>=', $twentyFourHoursAgo)
+            ->get()
+            ->keyBy('task_id');
+
+        // Format tasks with status
+        $tasksWithStatus = $tasks->map(function($task) use ($user, $completions, $now) {
+            $taskId = $task->ID;
+            $completion = $completions->get($taskId);
+            
+            $status = 'available'; // available, in_progress, claimable, claimed
+            $rewardAvailable = false;
+            $secondsRemaining = 0;
+            $nextAvailableAt = null;
+            $secondsUntilAvailable = 0;
+
+            if ($completion) {
+                // Task was claimed within 24 hours
+                $claimedAt = Carbon::parse($completion->reward_claimed_at);
+                $nextAvailable = $claimedAt->copy()->addHours(24);
+                
+                if ($now < $nextAvailable) {
+                    $status = 'claimed';
+                    $nextAvailableAt = $nextAvailable->format('Y-m-d H:i:s');
+                    $secondsUntilAvailable = $now->diffInSeconds($nextAvailable);
+                } else {
+                    $status = 'available';
+                }
+            } else {
+                // Check if there's an unclaimed task in progress
+                $inProgress = TaskCompletion::where('user_id', $user->id)
+                    ->where('task_id', $taskId)
+                    ->where('task_type', 'daily')
+                    ->where('reward_claimed', 0)
+                    ->orderBy('created_at', 'desc')
+                    ->first();
+
+                if ($inProgress) {
+                    $availableAt = Carbon::parse($inProgress->reward_available_at);
+                    
+                    if ($now >= $availableAt) {
+                        $status = 'claimable';
+                        $rewardAvailable = true;
+                    } else {
+                        $status = 'in_progress';
+                        $secondsRemaining = $now->diffInSeconds($availableAt);
+                    }
+                }
+            }
+
+            return [
+                'id' => $task->ID,
+                'name' => $task->Name,
+                'reward' => (float) $task->Token,
+                'redirect_link' => $task->Link,
+                'icon' => $task->Icon,
+                'status' => $status,
+                'reward_available' => $rewardAvailable,
+                'seconds_remaining' => $secondsRemaining,
+                'next_available_at' => $nextAvailableAt,
+                'seconds_until_available' => $secondsUntilAvailable
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => $tasksWithStatus
         ]);
     }
 }

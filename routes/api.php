@@ -63,16 +63,20 @@ Route::post('/reactivate_account', [UserController::class, 'reactivateAccount'])
 
 // Mining Routes
 Route::post('/start_mining', [MiningController::class, 'startMining']);
+Route::get('/mining_status', [MiningController::class, 'miningStatus']); // New endpoint for polling
 Route::post('/start_coin', [MiningController::class, 'startCoin']);
 Route::post('/claim_bonus', [MiningController::class, 'claimBonus']);
 Route::post('/bonus_history', [MiningController::class, 'bonusHistory']);
 Route::post('/social_claim', [MiningController::class, 'socialClaim']);
 Route::post('/social_list', [MiningController::class, 'socialList']);
+Route::post('/add_daily_reward', [MiningController::class, 'addDailyReward']); // Add daily reward coins (watch ad reward)
+Route::post('/get_daily_reward_status', [MiningController::class, 'getDailyRewardStatus']); // Get daily reward claim status
 
 // Task Routes
 Route::post('/task_start', [TaskController::class, 'taskStart']);
 Route::post('/task_claim_reward', [TaskController::class, 'taskClaimReward']);
 Route::post('/task_track', [TaskController::class, 'trackTask']);
+Route::post('/get_daily_tasks', [TaskController::class, 'getDailyTasks']); // Get daily tasks with user's claim status
 
 // Booster Routes
 Route::post('/booster_status', [BoosterController::class, 'boosterStatus']);

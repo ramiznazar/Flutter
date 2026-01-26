@@ -136,7 +136,21 @@ class UsersViewController extends Controller
                 return back()->with('message', $message)->with('messageType', 'danger');
             }
 
-            $user->update(['coin' => $newCoins]);
+            // Update both coin (spending currency) and token (mining balance)
+            $currentToken = (float) $user->token;
+            $newToken = $currentToken + $coinAmount;
+            
+            // If user is mining, also adjust mining_start_balance to maintain accuracy
+            $updateData = [
+                'coin' => $newCoins,
+                'token' => $newToken
+            ];
+            
+            if ($user->is_mining == 1 && $user->mining_start_balance !== null) {
+                $updateData['mining_start_balance'] = (float) $user->mining_start_balance + $coinAmount;
+            }
+            
+            $user->update($updateData);
 
             $message = 'Coins updated successfully. Previous balance: ' . $currentCoins . ', New balance: ' . $newCoins . '.';
             if (request()->ajax() || request()->wantsJson()) {

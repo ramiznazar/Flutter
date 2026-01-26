@@ -20,6 +20,12 @@ class Kernel extends ConsoleKernel
         // Task rewards distribution - run every 5 minutes
         $schedule->command('tasks:distribute-rewards')
             ->everyFiveMinutes();
+        
+        // Update mining balances - run every 30 seconds for real-time updates
+        $schedule->command('mining:update-balances')
+            ->everyThirtySeconds()
+            ->withoutOverlapping()
+            ->runInBackground();
     }
 
     /**

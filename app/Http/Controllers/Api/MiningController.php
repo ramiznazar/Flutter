@@ -10,6 +10,7 @@ use App\Models\CoinSetting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 
 class MiningController extends Controller
@@ -128,14 +129,9 @@ class MiningController extends Controller
         $userCustomSpeed = $user->custom_coin_speed ?? null;
         $effectiveMiningSpeed = $userCustomSpeed ?? $overallMiningSpeed;
         
-        // Apply custom speed multiplier to token_per_sec
-        // If custom speed is set, multiply base token_per_sec by (custom_speed / overall_speed)
-        $baseTokenPerSec = (float) $perkCrutoxPerTime;
-        if ($userCustomSpeed !== null && $overallMiningSpeed > 0) {
-            $addToken = $baseTokenPerSec * ($effectiveMiningSpeed / $overallMiningSpeed);
-        } else {
-            $addToken = $baseTokenPerSec;
-        }
+        // Calculate token_per_sec directly from mining speed (coins per hour)
+        // mining_speed represents coins per hour, so divide by 3600 to get coins per second
+        $addToken = (float) $effectiveMiningSpeed / 3600;
         $addToken = number_format($addToken, 10, '.', '');
 
         $secondsPerCoin = (int) $coinSettings->seconds_per_coin;
@@ -321,8 +317,8 @@ class MiningController extends Controller
             ? $frontendBalance 
             : (float) $user->token;
         
-        // Store starting balance in token field (this will be updated by frontend during mining)
-        // The token field stores the current balance, which becomes the starting balance for this session
+        // Store starting balance separately for backend-managed mining
+        // Backend will calculate balance from this starting point
 
         DB::beginTransaction();
 
@@ -332,7 +328,8 @@ class MiningController extends Controller
                 'is_mining' => 1,
                 'mining_end_time' => $miningEndTime,
                 'mining_time' => $totalTime,
-                'token' => $startingBalance // ✅ Store starting balance (will be updated by frontend during mining)
+                'token' => $startingBalance, // Current balance (will be updated by scheduled job)
+                'mining_start_balance' => $startingBalance // Store starting balance for calculation
             ]);
 
             // Bonus to invited referral if coins_required == 0
@@ -606,6 +603,317 @@ class MiningController extends Controller
         return response()->json([
             'success' => true,
             'data' => []
+        ]);
+    }
+
+    /**
+     * Get daily reward status (check if user can claim)
+     */
+    public function getDailyRewardStatus(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'email' => 'required|email',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Email is required'
+            ], 400);
+        }
+
+        $user = User::where('email', $request->email)
+            ->where('account_status', 'active')
+            ->first();
+
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'User not found or account not active'
+            ], 404);
+        }
+
+        $now = Carbon::now();
+        $twentyFourHoursAgo = $now->copy()->subHours(24);
+
+        // Check if daily_reward_claims table exists and has data
+        try {
+            $lastClaim = DB::table('daily_reward_claims')
+                ->where('user_id', $user->id)
+                ->where('claimed_at', '>=', $twentyFourHoursAgo)
+                ->orderBy('claimed_at', 'desc')
+                ->first();
+
+            if ($lastClaim) {
+                $nextAvailableAt = Carbon::parse($lastClaim->claimed_at)->addHours(24);
+                $secondsUntilAvailable = $now->diffInSeconds($nextAvailableAt);
+                
+                return response()->json([
+                    'success' => true,
+                    'claimed' => true,
+                    'last_claimed_at' => $lastClaim->claimed_at,
+                    'coins_claimed' => (float) $lastClaim->coins_claimed,
+                    'next_available_at' => $nextAvailableAt->format('Y-m-d H:i:s'),
+                    'seconds_until_available' => $secondsUntilAvailable
+                ]);
+            }
+        } catch (\Exception $e) {
+            // Table might not exist or have different structure - return available
+            Log::warning('Daily reward claims table check failed: ' . $e->getMessage());
+        }
+
+        return response()->json([
+            'success' => true,
+            'claimed' => false,
+            'available' => true,
+            'message' => 'Daily reward is available'
+        ]);
+    }
+
+    /**
+     * Add daily reward coins to user's wallet
+     * User watches ad and gets 2-4 coins (frontend manages timer)
+     * Enforces 24-hour cooldown between claims
+     */
+    public function addDailyReward(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'email' => 'required|email',
+            'coins' => 'required|numeric|min:0|max:10', // Allow 0-10 coins for flexibility
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => $validator->errors()->first() ?? 'Missing required fields'
+            ], 400);
+        }
+
+        $user = User::where('email', $request->email)
+            ->where('account_status', 'active')
+            ->first();
+
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'User not found or account not active'
+            ], 404);
+        }
+
+        $now = Carbon::now();
+        $twentyFourHoursAgo = $now->copy()->subHours(24);
+
+        // Check if user claimed daily reward within last 24 hours
+        try {
+            $lastClaim = DB::table('daily_reward_claims')
+                ->where('user_id', $user->id)
+                ->where('claimed_at', '>=', $twentyFourHoursAgo)
+                ->orderBy('claimed_at', 'desc')
+                ->first();
+
+            if ($lastClaim) {
+                $nextAvailableAt = Carbon::parse($lastClaim->claimed_at)->addHours(24);
+                $secondsUntilAvailable = $now->diffInSeconds($nextAvailableAt);
+                
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Daily reward already claimed. Available again in 24 hours.',
+                    'next_available_at' => $nextAvailableAt->format('Y-m-d H:i:s'),
+                    'seconds_until_available' => $secondsUntilAvailable
+                ], 400);
+            }
+        } catch (\Exception $e) {
+            // Table might not exist - log and continue (will create record)
+            Log::warning('Daily reward claims table check failed: ' . $e->getMessage());
+        }
+
+        $coins = (float) $request->coins;
+
+        // If coins not provided or 0, generate random 2-4 coins
+        if ($coins <= 0) {
+            $coins = round(rand(200, 400) / 100, 2); // Random between 2.00 and 4.00
+        }
+
+        DB::beginTransaction();
+
+        try {
+            // Add coins to mining balance (token)
+            $user->increment('token', $coins);
+            
+            // If mining is active, adjust mining_start_balance so balance calculation continues correctly
+            if ($user->is_mining == 1 && $user->mining_start_balance !== null) {
+                $user->increment('mining_start_balance', $coins);
+            }
+            
+            // Record the claim for 24-hour cooldown tracking
+            try {
+                DB::table('daily_reward_claims')->insert([
+                    'user_id' => $user->id,
+                    'coins_claimed' => $coins,
+                    'claimed_at' => $now
+                ]);
+            } catch (\Exception $e) {
+                // Table might not exist - log but don't fail
+                Log::warning('Failed to record daily reward claim: ' . $e->getMessage());
+            }
+            
+            $user->refresh();
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Daily reward coins added successfully',
+                'coins_added' => $coins,
+                'new_balance' => (float) $user->token,
+                'is_mining_active' => $user->is_mining == 1
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Error adding coins: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get current mining status (for frontend polling)
+     * This endpoint returns the current balance calculated by backend
+     * Frontend should poll this every 5-10 seconds
+     */
+    public function miningStatus(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'email' => 'required|email',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => $validator->errors()->first() ?? 'Email is required'
+            ], 400);
+        }
+
+        $user = User::where('email', $request->email)
+            ->where('account_status', 'active')
+            ->first();
+
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'User not found or account not active'
+            ], 404);
+        }
+
+        $this->checkRecord($user->id);
+        $perks = $this->getUserPerks($user->id);
+
+        $timeLimitInSec = $perks['perk_mining_time'] * 3600;
+
+        $currentTime = Carbon::now()->format('Y-m-d-H:i:s');
+
+        $coinSettings = CoinSetting::first();
+        if (!$coinSettings) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Coin settings not found'
+            ], 404);
+        }
+
+        // Get settings for mining speed calculation
+        $settings = \App\Models\Setting::first();
+        $overallMiningSpeed = $settings ? (float) $settings->mining_speed : 10.00;
+        
+        // Check if user has custom coin speed
+        $userCustomSpeed = $user->custom_coin_speed ?? null;
+        $effectiveMiningSpeed = $userCustomSpeed ?? $overallMiningSpeed;
+        
+        // Calculate token_per_sec directly from mining speed (coins per hour)
+        // mining_speed represents coins per hour, so divide by 3600 to get coins per second
+        $tokenPerSec = (float) $effectiveMiningSpeed / 3600;
+
+        // Get active booster and apply multiplier
+        $booster = \App\Models\UserBooster::where('user_id', $user->id)
+            ->where('is_active', 1)
+            ->where('expires_at', '>', Carbon::now())
+            ->orderBy('created_at', 'desc')
+            ->first();
+
+        $boosterMultiplier = 1.0;
+        $hasActiveBooster = false;
+        $boosterType = null;
+        $boosterExpiresAt = null;
+        $boosterSecondsRemaining = 0;
+
+        if ($booster) {
+            $hasActiveBooster = true;
+            $boosterType = $booster->booster_type;
+            $boosterMultiplier = (float) str_replace('x', '', $boosterType);
+            $boosterExpiresAt = $booster->expires_at->format('Y-m-d H:i:s');
+            $boosterSecondsRemaining = Carbon::now()->diffInSeconds($booster->expires_at);
+            $tokenPerSec = $tokenPerSec * $boosterMultiplier;
+        }
+
+        $usdt = (float) $coinSettings->token_price;
+
+        // Get current balance from database (updated by scheduled job)
+        // IMPORTANT: Refresh the user model to get the latest token value from database
+        // The scheduled job updates the token field, so we need fresh data
+        $user->refresh();
+        $currentBalance = (float) $user->token;
+        $startingBalance = $user->mining_start_balance !== null 
+            ? (float) $user->mining_start_balance 
+            : $currentBalance;
+
+        // Calculate mining status
+        $isMining = $user->is_mining == 1 && $user->mining_end_time;
+        $miningStatus = 'idle';
+        $miningEndTime = null;
+        $secondsRemaining = 0;
+        $elapsedSeconds = 0;
+        $totalMiningTimeInSec = 0;
+
+        if ($isMining) {
+            $miningStatus = 'in_progress';
+            $miningEndTime = $user->mining_end_time;
+            $miningEndTimeCarbon = Carbon::createFromFormat('Y-m-d-H:i:s', $user->mining_end_time);
+            $now = Carbon::now();
+            
+            if ($now->gt($miningEndTimeCarbon)) {
+                // Mining completed (scheduled job should handle this, but return status)
+                $miningStatus = 'completed';
+                $secondsRemaining = 0;
+                $elapsedSeconds = (int) ($user->mining_time ?? $timeLimitInSec);
+            } else {
+                $secondsRemaining = $now->diffInSeconds($miningEndTimeCarbon);
+                $totalMiningTimeInSec = (int) ($user->mining_time ?? $timeLimitInSec);
+                $elapsedSeconds = $totalMiningTimeInSec - $secondsRemaining;
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => $miningStatus,
+            'server_time' => $currentTime,
+            'mining_end_time' => $miningEndTime ?? '',
+            'total_team' => (string) $user->total_invite,
+            'coin' => $user->coin,
+            'balance' => number_format($currentBalance, 10, '.', ''), // Current balance from backend
+            'starting_balance' => number_format($startingBalance, 10, '.', ''), // Balance when mining started
+            'token_per_sec' => number_format($tokenPerSec, 10, '.', ''), // Token per second (with booster applied) - use this for smooth UI animation
+            'mining_speed' => (float) $effectiveMiningSpeed,
+            'usdt' => $usdt,
+            'total_mining_time_in_sec' => $totalMiningTimeInSec,
+            'seconds_remaining' => $secondsRemaining,
+            'elapsed_seconds' => $elapsedSeconds,
+            'has_active_booster' => $hasActiveBooster,
+            'booster_type' => $boosterType,
+            'booster_multiplier' => $boosterMultiplier,
+            'booster_expires_at' => $boosterExpiresAt,
+            'booster_seconds_remaining' => $boosterSecondsRemaining,
+            'balance_timestamp' => Carbon::now()->toIso8601String(), // Timestamp when this balance was calculated - use for smooth animation
+            'is_mining_active' => $isMining // Helper flag for frontend
         ]);
     }
 }
