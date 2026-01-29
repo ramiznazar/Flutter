@@ -49,11 +49,7 @@ class SettingsViewController extends Controller
         if ($request->has('base_rate')) $updateData['base_mining_rate'] = $request->base_rate;
         if ($request->has('max_speed')) $updateData['max_mining_speed'] = $request->max_speed;
 
-        if ($settings) {
-            $settings->update($updateData);
-        } else {
-            Setting::create($updateData);
-        }
+        Setting::updateOrCreateSettings($updateData);
 
         return redirect()->route('admin.mining-settings')
             ->with('message', 'Mining settings updated successfully.')
@@ -132,11 +128,7 @@ class SettingsViewController extends Controller
         if ($request->has('max_referrals')) $updateData['max_referrals'] = $request->max_referrals;
         if ($request->has('bonus_reward')) $updateData['bonus_reward'] = $request->bonus_reward;
 
-        if ($settings) {
-            $settings->update($updateData);
-        } else {
-            Setting::create($updateData);
-        }
+        Setting::updateOrCreateSettings($updateData);
 
         return redirect()->route('admin.referral-settings')
             ->with('message', 'Referral settings updated successfully.')
@@ -272,12 +264,7 @@ class SettingsViewController extends Controller
             $updateData[$fieldPrefix . 'max_coins'] = $request->max_coins;
         }
 
-        $settings = Setting::first();
-        if ($settings) {
-            $settings->update($updateData);
-        } else {
-            Setting::create($updateData);
-        }
+        Setting::updateOrCreateSettings($updateData);
 
         return redirect()->route('admin.mystery-box')
             ->with('message', ucfirst($boxType) . ' mystery box settings updated successfully.')
@@ -314,14 +301,66 @@ class SettingsViewController extends Controller
         if ($request->has('kyc_mining_sessions')) $updateData['kyc_mining_sessions'] = $request->kyc_mining_sessions;
         if ($request->has('kyc_referrals_required')) $updateData['kyc_referrals_required'] = $request->kyc_referrals_required;
 
-        if ($settings) {
-            $settings->update($updateData);
-        } else {
-            Setting::create($updateData);
-        }
+        Setting::updateOrCreateSettings($updateData);
 
         return redirect()->route('admin.kyc-settings')
             ->with('message', 'KYC settings updated successfully.')
+            ->with('messageType', 'success');
+    }
+
+    /**
+     * General app settings: maintenance, update prompt, and messages/links.
+     */
+    public function appSettings()
+    {
+        $settings = Setting::first();
+
+        $appSettings = [
+            'maintenance' => (int) ($settings->maintenance ?? 0),
+            'maintenance_message' => (string) ($settings->maintenance_message ?? ''),
+            'force_update' => (int) ($settings->force_update ?? 0),
+            'update_version' => (string) ($settings->update_version ?? config('app.mobile_app_version', '1.1.9')),
+            'update_message' => (string) ($settings->update_message ?? ''),
+            'update_link' => (string) ($settings->update_link ?? ''),
+        ];
+
+        return view('admin.settings.app', compact('appSettings'));
+    }
+
+    public function updateAppSettings(Request $request)
+    {
+        $request->validate([
+            'maintenance' => 'nullable|in:0,1',
+            'maintenance_message' => 'nullable|string',
+            'force_update' => 'nullable|in:0,1',
+            'update_version' => 'nullable|string',
+            'update_message' => 'nullable|string',
+            'update_link' => 'nullable|string',
+        ]);
+
+        $updateData = [
+            // Checkboxes: present means "1", absent means "0"
+            'maintenance' => $request->has('maintenance') ? 1 : 0,
+            'force_update' => $request->has('force_update') ? 1 : 0,
+        ];
+
+        if ($request->has('maintenance_message')) {
+            $updateData['maintenance_message'] = $request->maintenance_message ?? '';
+        }
+        if ($request->has('update_version')) {
+            $updateData['update_version'] = $request->update_version ?? '';
+        }
+        if ($request->has('update_message')) {
+            $updateData['update_message'] = $request->update_message ?? '';
+        }
+        if ($request->has('update_link')) {
+            $updateData['update_link'] = $request->update_link ?? '';
+        }
+
+        Setting::updateOrCreateSettings($updateData);
+
+        return redirect()->route('admin.app-settings')
+            ->with('message', 'App settings updated successfully.')
             ->with('messageType', 'success');
     }
 

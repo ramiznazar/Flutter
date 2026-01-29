@@ -1,0 +1,44 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Support\Facades\DB;
+
+return new class extends Migration
+{
+    /**
+     * Ensure social_media_setting.ID is AUTO_INCREMENT and PRIMARY KEY so inserts
+     * without explicit ID work. Fixes "Field 'ID' doesn't have a default value"
+     * when table came from dump.
+     */
+    public function up(): void
+    {
+        if (DB::connection()->getDriverName() !== 'mysql') {
+            return;
+        }
+        $db = config('database.connections.mysql.database');
+        $prefix = config('database.connections.mysql.prefix', '');
+        $table = $prefix . 'social_media_setting';
+        $r = DB::selectOne(
+            "SELECT EXTRA FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = 'ID'",
+            [$db, $table]
+        );
+        if (!$r || str_contains((string) $r->EXTRA, 'auto_increment')) {
+            return;
+        }
+        try {
+            $pk = DB::selectOne("SELECT 1 FROM information_schema.TABLE_CONSTRAINTS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND CONSTRAINT_TYPE = 'PRIMARY KEY'", [$db, $table]);
+            if ($pk) {
+                DB::statement("ALTER TABLE `{$table}` MODIFY `ID` INT NOT NULL AUTO_INCREMENT");
+            } else {
+                DB::statement("ALTER TABLE `{$table}` MODIFY `ID` INT NOT NULL AUTO_INCREMENT PRIMARY KEY");
+            }
+        } catch (\Throwable $e) {
+            // Skip if already correct or structure differs
+        }
+    }
+
+    public function down(): void
+    {
+        // Irreversible
+    }
+};

@@ -11,32 +11,126 @@ use Illuminate\Database\Schema\Blueprint;
 
 class SettingsManageController extends Controller
 {
+    /**
+     * GET /api/admin/settings_manage — App config for Crutox mobile app.
+     * Response must be exactly: { "success": true, "data": { ... } }, HTTP 200.
+     * App uses AppSettings.fromJson(data). Sends maintenance=0, force_update=0, and update_version
+     * equal to the current app version (config app.mobile_app_version, default 1.1.9) so the app
+     * does not show "Update available". Empty string is formatted to ".0.0" by the app and triggers the sheet.
+     * Privacy link key is pirvacy_policy_link (app typo). Use ?format=array for [{ ... }].
+     */
     public function index(Request $request)
     {
-        $settings = Setting::first();
-
-        if (!$settings) {
-            // Return default settings
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'mining_speed' => 10,
-                    'base_mining_rate' => 5,
-                    'max_mining_speed' => 50,
-                    'referrer_reward' => 50,
-                    'referee_reward' => 25,
-                    'max_referrals' => 100,
-                    'bonus_reward' => 500,
-                    'current_users' => 99000,
-                    'goal_users' => 1000000
-                ]
-            ]);
+        try {
+            $data = $this->buildAppSettingsData();
+        } catch (\Throwable $e) {
+            $data = $this->minimalNonBlockingData();
         }
 
+        if ($request->query('format') === 'array') {
+            return response()->json([$data], 200)
+                ->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+        }
         return response()->json([
             'success' => true,
-            'data' => $settings
+            'data' => $data,
+        ], 200)->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    }
+
+    /**
+     * Minimal payload that never blocks the app: no maintenance, no update prompt.
+     * Used when buildAppSettingsData throws (e.g. DB error) so the app still gets 200 and can run.
+     * update_version must match app (e.g. "1.1.9"); empty string is formatted to ".0.0" by the app and triggers the update sheet.
+     */
+    private function minimalNonBlockingData(): array
+    {
+        return [
+            'maintenance' => 0,
+            'maintenance_message' => '',
+            'force_update' => 0,
+            'update_version' => (string) config('app.mobile_app_version', '1.1.9'),
+            'update_message' => '',
+            'update_link' => '',
+        ];
+    }
+
+    /**
+     * Build the exact "data" object the Flutter app expects (AppSettings.fromJson).
+     * Keys snake_case. maintenance/force_update always 0. Types: int/string as app expects.
+     */
+    private function buildAppSettingsData(): array
+    {
+        // Read settings fresh so admin panel changes (e.g. maintenance mode) take effect on next app request
+        $settings = Setting::first();
+        $defaults = array_merge(Setting::defaultAttributes(), [
+            'mining_speed' => 10, 'base_mining_rate' => 5, 'max_mining_speed' => 50,
+            'referrer_reward' => 50, 'referee_reward' => 25, 'max_referrals' => 100, 'bonus_reward' => 500,
+            'current_users' => 99000, 'goal_users' => 1000000,
         ]);
+        $raw = $settings ? $settings->toArray() : $defaults;
+
+        $data = [];
+
+        // Maintenance / update — read from DB so admin panel (App Settings) controls them.
+        // When maintenance=1 the app can show maintenance screen; when force_update=1 and update_version
+        // is set, the app can show update prompt. If update_version is empty we fall back to config
+        // so the app does not get an invalid version string.
+        $data['maintenance'] = (int) ($raw['maintenance'] ?? 0);
+        $data['maintenance_message'] = (string) ($raw['maintenance_message'] ?? '');
+        $data['force_update'] = (int) ($raw['force_update'] ?? 0);
+        $data['update_version'] = (string) ($raw['update_version'] ?? '') !== ''
+            ? (string) $raw['update_version']
+            : (string) config('app.mobile_app_version', '1.1.9');
+        $data['update_message'] = (string) ($raw['update_message'] ?? '');
+        $data['update_link'] = (string) ($raw['update_link'] ?? '');
+
+        // id and links — app expects pirvacy_policy_link (typo). Support both DB column spellings.
+        $data['id'] = (int) ($raw['id'] ?? 1);
+        $data['pirvacy_policy_link'] = (string) ($raw['pirvacy_policy_link'] ?? $raw['privacy_policy_link'] ?? '');
+        $data['term_n_condition_link'] = (string) ($raw['term_n_condition_link'] ?? '');
+        $data['support_email'] = (string) ($raw['support_email'] ?? '');
+        $data['faq_link'] = (string) ($raw['faq_link'] ?? '');
+        $data['white_paper_link'] = (string) ($raw['white_paper_link'] ?? '');
+        $data['road_map_link'] = (string) ($raw['road_map_link'] ?? '');
+        $data['about_us_link'] = (string) ($raw['about_us_link'] ?? '');
+
+        // Mining
+        $data['mining_speed'] = isset($raw['mining_speed']) ? (float) $raw['mining_speed'] : 10.0;
+        $data['base_mining_rate'] = isset($raw['base_mining_rate']) ? (float) $raw['base_mining_rate'] : 5.0;
+        $data['max_mining_speed'] = isset($raw['max_mining_speed']) ? (float) $raw['max_mining_speed'] : 50.0;
+
+        // Referral
+        $data['referrer_reward'] = (int) ($raw['referrer_reward'] ?? 50);
+        $data['referee_reward'] = (int) ($raw['referee_reward'] ?? 25);
+        $data['max_referrals'] = (int) ($raw['max_referrals'] ?? 100);
+        $data['bonus_reward'] = (int) ($raw['bonus_reward'] ?? 500);
+
+        // User count
+        $data['current_users'] = (int) ($raw['current_users'] ?? 99000);
+        $data['goal_users'] = (int) ($raw['goal_users'] ?? 1000000);
+        $data['daily_tasks_reset_time'] = isset($raw['daily_tasks_reset_time']) && $raw['daily_tasks_reset_time'] !== null
+            ? (string) $raw['daily_tasks_reset_time'] : '';
+
+        // Mystery box — common, rare, epic, legendary
+        foreach (['common', 'rare', 'epic', 'legendary'] as $t) {
+            $data[$t . '_box_cooldown'] = (int) ($raw[$t . '_box_cooldown'] ?? 0);
+            $data[$t . '_box_ads'] = (int) ($raw[$t . '_box_ads'] ?? 1);
+            $data[$t . '_box_min_coins'] = isset($raw[$t . '_box_min_coins']) ? (float) $raw[$t . '_box_min_coins'] : 0.0;
+            $data[$t . '_box_max_coins'] = isset($raw[$t . '_box_max_coins']) ? (float) $raw[$t . '_box_max_coins'] : 0.0;
+        }
+        $data['legendary_box_reward_type'] = (string) ($raw['legendary_box_reward_type'] ?? 'booster');
+        $data['legendary_box_booster_types'] = (string) ($raw['legendary_box_booster_types'] ?? '2x,3x,5x');
+        $data['legendary_box_booster_duration'] = isset($raw['legendary_box_booster_duration']) ? (float) $raw['legendary_box_booster_duration'] : 10.0;
+
+        // KYC
+        $data['kyc_mining_sessions'] = (int) ($raw['kyc_mining_sessions'] ?? 14);
+        $data['kyc_referrals_required'] = (int) ($raw['kyc_referrals_required'] ?? 10);
+
+        // Ad waterfall
+        $data['ad_waterfall_order'] = isset($raw['ad_waterfall_order']) ? $raw['ad_waterfall_order'] : null;
+        $data['ad_waterfall_enabled'] = (int) (isset($raw['ad_waterfall_enabled']) ? $raw['ad_waterfall_enabled'] : 1);
+
+        return $data;
     }
 
     public function update(Request $request)
@@ -64,11 +158,7 @@ class SettingsManageController extends Controller
             if ($request->has('base_rate')) $updateData['base_mining_rate'] = $request->base_rate;
             if ($request->has('max_speed')) $updateData['max_mining_speed'] = $request->max_speed;
 
-            if ($settings) {
-                $settings->update($updateData);
-            } else {
-                Setting::create($updateData);
-            }
+            Setting::updateOrCreateSettings($updateData);
 
             return response()->json([
                 'success' => true,
@@ -85,11 +175,7 @@ class SettingsManageController extends Controller
             if ($request->has('max_referrals')) $updateData['max_referrals'] = $request->max_referrals;
             if ($request->has('bonus_reward')) $updateData['bonus_reward'] = $request->bonus_reward;
 
-            if ($settings) {
-                $settings->update($updateData);
-            } else {
-                Setting::create($updateData);
-            }
+            Setting::updateOrCreateSettings($updateData);
 
             return response()->json([
                 'success' => true,
@@ -104,11 +190,7 @@ class SettingsManageController extends Controller
             if ($request->has('current_users')) $updateData['current_users'] = $request->current_users;
             if ($request->has('goal_users')) $updateData['goal_users'] = $request->goal_users;
 
-            if ($settings) {
-                $settings->update($updateData);
-            } else {
-                Setting::create($updateData);
-            }
+            Setting::updateOrCreateSettings($updateData);
 
             return response()->json([
                 'success' => true,
@@ -144,11 +226,7 @@ class SettingsManageController extends Controller
             if ($request->has('min_coins')) $updateData[$fieldPrefix . 'min_coins'] = $request->min_coins;
             if ($request->has('max_coins')) $updateData[$fieldPrefix . 'max_coins'] = $request->max_coins;
 
-            if ($settings) {
-                $settings->update($updateData);
-            } else {
-                Setting::create($updateData);
-            }
+            Setting::updateOrCreateSettings($updateData);
 
             return response()->json([
                 'success' => true,
@@ -163,11 +241,7 @@ class SettingsManageController extends Controller
             if ($request->has('kyc_mining_sessions')) $updateData['kyc_mining_sessions'] = $request->kyc_mining_sessions;
             if ($request->has('kyc_referrals_required')) $updateData['kyc_referrals_required'] = $request->kyc_referrals_required;
 
-            if ($settings) {
-                $settings->update($updateData);
-            } else {
-                Setting::create($updateData);
-            }
+            Setting::updateOrCreateSettings($updateData);
 
             return response()->json([
                 'success' => true,
@@ -186,11 +260,7 @@ class SettingsManageController extends Controller
             }
             if ($request->has('ad_waterfall_enabled')) $updateData['ad_waterfall_enabled'] = $request->ad_waterfall_enabled;
 
-            if ($settings) {
-                $settings->update($updateData);
-            } else {
-                Setting::create($updateData);
-            }
+            Setting::updateOrCreateSettings($updateData);
 
             return response()->json([
                 'success' => true,
@@ -264,11 +334,7 @@ class SettingsManageController extends Controller
             ], 400);
         }
 
-        if ($settings) {
-            $settings->update($updateData);
-        } else {
-            $settings = Setting::create($updateData);
-        }
+        $settings = Setting::updateOrCreateSettings($updateData);
 
         return response()->json([
             'success' => true,

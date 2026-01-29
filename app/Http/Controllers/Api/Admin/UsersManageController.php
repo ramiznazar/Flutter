@@ -15,10 +15,52 @@ class UsersManageController extends Controller
 {
     public function index(Request $request)
     {
+        // Fast path for Flutter getUserCoinsBalance:
+        // Frontend calls: GET /api/admin/users_manage?email=abc@gmail.com
+        // We only need a single user's coin balance, so avoid full paginated query.
+        if ($request->has('email')) {
+            $email = $request->query('email');
+
+            $user = User::where('account_status', 'active')
+                ->where('email', $email)
+                ->select('id', 'username', 'email', 'name', 'coin', 'join_date')
+                ->first();
+
+            if (!$user) {
+                return response()->json([
+                    'success' => true,
+                    'data' => [],
+                    'total' => 0,
+                    'page' => 1,
+                    'perPage' => 1,
+                ]);
+            }
+
+            $mapped = [
+                'id' => $user->id,
+                'user_id' => 'USR' . str_pad($user->id, 3, '0', STR_PAD_LEFT),
+                'username' => $user->username ?: 'N/A',
+                'email' => $user->email,
+                'name' => $user->name,
+                'coins_balance' => (float) $user->coin,
+                'type' => 'user',
+                'join_date' => $user->join_date,
+            ];
+
+            return response()->json([
+                'success' => true,
+                'data' => [$mapped],
+                'total' => 1,
+                'page' => 1,
+                'perPage' => 1,
+            ]);
+        }
+
+        // Default admin panel listing (paginated)
         $search = $request->get('search', '');
-        $page = $request->get('page', 1);
-        $perPage = $request->get('perPage', 20);
-        $offset = ($page - 1) * $perPage;
+        $page = (int) $request->get('page', 1);
+        $perPage = (int) $request->get('perPage', 20);
+        $offset = max(0, ($page - 1) * $perPage);
 
         $query = User::where('account_status', 'active');
 
@@ -32,9 +74,11 @@ class UsersManageController extends Controller
         }
 
         $total = $query->count();
+
         $users = $query->orderBy('id', 'desc')
             ->offset($offset)
             ->limit($perPage)
+            ->select('id', 'username', 'email', 'name', 'coin', 'join_date')
             ->get()
             ->map(function($user) {
                 return [

@@ -53,11 +53,7 @@ class DailyTasksReset extends Command
                 ->update(['reward_claimed' => 1]);
             
             // Update reset time
-            if ($settings) {
-                $settings->update(['daily_tasks_reset_time' => $now]);
-            } else {
-                Setting::create(['daily_tasks_reset_time' => $now]);
-            }
+            Setting::updateOrCreateSettings(['daily_tasks_reset_time' => $now]);
             
             $this->info("Daily tasks reset successfully at " . $now->format('Y-m-d H:i:s'));
         } else {

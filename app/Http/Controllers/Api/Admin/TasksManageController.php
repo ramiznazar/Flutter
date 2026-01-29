@@ -182,12 +182,7 @@ class TasksManageController extends Controller
 
                 // Update reset time if provided
                 if ($request->has('reset_time')) {
-                    $settings = Setting::first();
-                    if ($settings) {
-                        $settings->update(['daily_tasks_reset_time' => $request->reset_time]);
-                    } else {
-                        Setting::create(['daily_tasks_reset_time' => $request->reset_time]);
-                    }
+                    Setting::updateOrCreateSettings(['daily_tasks_reset_time' => $request->reset_time]);
                 }
 
                 DB::commit();

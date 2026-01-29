@@ -11,9 +11,14 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('shop', function (Blueprint $table) {
-            $table->text('Description')->nullable()->after('Title');
-            $table->decimal('Price', 10, 2)->default(0)->nullable()->after('Description');
+        $t = 'shop';
+        Schema::table($t, function (Blueprint $table) use ($t) {
+            if (!Schema::hasColumn($t, 'Description')) {
+                $table->text('Description')->nullable()->after('Title');
+            }
+            if (!Schema::hasColumn($t, 'Price')) {
+                $table->decimal('Price', 10, 2)->default(0)->nullable()->after('Description');
+            }
         });
     }
 

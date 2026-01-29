@@ -8,20 +8,36 @@ return new class extends Migration
 {
     /**
      * Run the migrations.
+     * Idempotent and works even when legendary_box_max_coins does not exist (e.g. settings from dump).
      */
     public function up(): void
     {
-        Schema::table('settings', function (Blueprint $table) {
-            if (!Schema::hasColumn('settings', 'legendary_box_reward_type')) {
-                $table->string('legendary_box_reward_type', 20)->default('booster')->nullable()->after('legendary_box_max_coins')->comment('Reward type for legendary box: coins or booster');
-            }
-            if (!Schema::hasColumn('settings', 'legendary_box_booster_types')) {
-                $table->string('legendary_box_booster_types', 50)->default('2x,3x,5x')->nullable()->after('legendary_box_reward_type')->comment('Available booster types for legendary box (comma-separated: 2x,3x,5x)');
-            }
-            if (!Schema::hasColumn('settings', 'legendary_box_booster_duration')) {
-                $table->decimal('legendary_box_booster_duration', 5, 2)->default(10.00)->nullable()->after('legendary_box_booster_types')->comment('Booster duration in hours for legendary box');
-            }
-        });
+        $t = 'settings';
+        $afterCol = Schema::hasColumn($t, 'legendary_box_max_coins') ? 'legendary_box_max_coins' : 'about_us_link';
+
+        if (!Schema::hasColumn($t, 'legendary_box_reward_type')) {
+            Schema::table($t, function (Blueprint $table) use ($afterCol) {
+                $table->string('legendary_box_reward_type', 20)->default('booster')->nullable()->after($afterCol)->comment('Reward type for legendary box: coins or booster');
+            });
+            $afterCol = 'legendary_box_reward_type';
+        } elseif (Schema::hasColumn($t, 'legendary_box_reward_type')) {
+            $afterCol = 'legendary_box_reward_type';
+        }
+
+        if (!Schema::hasColumn($t, 'legendary_box_booster_types')) {
+            Schema::table($t, function (Blueprint $table) use ($afterCol) {
+                $table->string('legendary_box_booster_types', 50)->default('2x,3x,5x')->nullable()->after($afterCol)->comment('Available booster types for legendary box (comma-separated: 2x,3x,5x)');
+            });
+            $afterCol = 'legendary_box_booster_types';
+        } elseif (Schema::hasColumn($t, 'legendary_box_booster_types')) {
+            $afterCol = 'legendary_box_booster_types';
+        }
+
+        if (!Schema::hasColumn($t, 'legendary_box_booster_duration')) {
+            Schema::table($t, function (Blueprint $table) use ($afterCol) {
+                $table->decimal('legendary_box_booster_duration', 5, 2)->default(10.00)->nullable()->after($afterCol)->comment('Booster duration in hours for legendary box');
+            });
+        }
     }
 
     /**

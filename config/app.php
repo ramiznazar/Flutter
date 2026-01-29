@@ -61,6 +61,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Crutox mobile app version (for /api/admin/settings_manage)
+    |--------------------------------------------------------------------------
+    |
+    | Must match the Flutter app version (pubspec.yaml version, e.g. 1.1.9).
+    | When update_version equals packageInfo.version, the app does not show
+    | the "Update available" sheet. Set MOBILE_APP_VERSION in .env when you
+    | release a new build (e.g. MOBILE_APP_VERSION=1.2.0).
+    |
+    */
+    'mobile_app_version' => env('MOBILE_APP_VERSION', '1.1.9'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Timezone
     |--------------------------------------------------------------------------
     |

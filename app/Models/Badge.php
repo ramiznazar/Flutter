@@ -14,7 +14,7 @@ class Badge extends Model
     public $timestamps = false; // Disable timestamps for badges
 
     protected $fillable = [
-        'badge_name', 'mining_sessions_required', 'spin_wheel_required',
+        'id', 'badge_name', 'mining_sessions_required', 'spin_wheel_required',
         'invite_friends_required', 'crutox_in_wallet_required',
         'social_media_task_completed', 'badges_icon'
     ];

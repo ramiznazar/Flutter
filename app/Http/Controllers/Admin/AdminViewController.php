@@ -53,17 +53,10 @@ class AdminViewController extends Controller
 
         $settings = Setting::first();
         
-        if ($settings) {
-            $settings->update([
-                'current_users' => $request->current_users,
-                'goal_users' => $request->goal_users
-            ]);
-        } else {
-            Setting::create([
-                'current_users' => $request->current_users,
-                'goal_users' => $request->goal_users
-            ]);
-        }
+        Setting::updateOrCreateSettings([
+            'current_users' => $request->current_users,
+            'goal_users' => $request->goal_users
+        ]);
 
         return redirect()->route('admin.dashboard')
             ->with('message', 'User count updated successfully.')

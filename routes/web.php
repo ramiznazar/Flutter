@@ -48,6 +48,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('/giveaway', [\App\Http\Controllers\Admin\GiveawayViewController::class, 'store'])->name('giveaway.store');
         Route::post('/giveaway/delete', [\App\Http\Controllers\Admin\GiveawayViewController::class, 'destroy'])->name('giveaway.destroy');
         // Settings
+        Route::get('/app-settings', [\App\Http\Controllers\Admin\SettingsViewController::class, 'appSettings'])->name('app-settings');
+        Route::post('/app-settings', [\App\Http\Controllers\Admin\SettingsViewController::class, 'updateAppSettings'])->name('app-settings.update');
         Route::get('/mining-settings', [\App\Http\Controllers\Admin\SettingsViewController::class, 'miningSettings'])->name('mining-settings');
         Route::post('/mining-settings', [\App\Http\Controllers\Admin\SettingsViewController::class, 'updateMiningSettings'])->name('mining-settings.update');
         Route::post('/mining-settings/user-coin-speed', [\App\Http\Controllers\Admin\SettingsViewController::class, 'updateUserCoinSpeed'])->name('mining-settings.user-coin-speed');

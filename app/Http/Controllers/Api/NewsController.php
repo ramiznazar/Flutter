@@ -25,7 +25,10 @@ class NewsController extends Controller
             ], 400);
         }
 
-        $user = User::where('email', $request->email)->first();
+        // Optimize: Select only id field for user lookup
+        $user = User::where('email', $request->email)
+            ->select('id')
+            ->first();
 
         if (!$user) {
             return response()->json([
@@ -33,33 +36,53 @@ class NewsController extends Controller
             ], 404);
         }
 
-        $page = $request->input('page', 1);
-        $perPage = $request->input('perPage', 10);
-        $offset = ($page - 1) * $perPage;
+        $page = (int) $request->input('page', 1);
+        $perPage = (int) $request->input('perPage', 10);
+        $offset = max(0, ($page - 1) * $perPage);
 
-        // Get news with like status
+        // Optimize: Select only needed columns from news
         $news = News::leftJoin('news_like', function($join) use ($user) {
                 $join->on('news.id', '=', 'news_like.News_ID')
                      ->where('news_like.User_ID', '=', $user->id);
             })
-            ->select('news.*')
+            ->select('news.id', 'news.Image', 'news.Title', 'news.CreatedAt', 'news.Likes')
             ->selectRaw('IF(news_like.News_ID IS NOT NULL, 1, 0) AS isliked')
             ->orderBy('news.id', 'desc')
             ->offset($offset)
             ->limit($perPage)
             ->get();
 
+        // Optimize: Get all news IDs in one batch
+        $newsIds = $news->pluck('id')->toArray();
+        
+        // Optimize: Get top 3 likers for ALL news items in a single query (eliminates N+1)
+        $allLikers = [];
+        if (!empty($newsIds)) {
+            // Get all likers for these news items, then group and take top 3 per news
+            $likersData = \Illuminate\Support\Facades\DB::table('news_like')
+                ->join('users', 'news_like.User_ID', '=', 'users.id')
+                ->whereIn('news_like.News_ID', $newsIds)
+                ->select('news_like.News_ID', 'users.ban_reason', 'news_like.CreatedAt')
+                ->orderBy('news_like.News_ID')
+                ->orderBy('news_like.CreatedAt', 'desc')
+                ->get();
+            
+            // Group by News_ID and take top 3 per group
+            $grouped = $likersData->groupBy('News_ID');
+            foreach ($grouped as $newsId => $group) {
+                $allLikers[$newsId] = $group->take(3)->pluck('ban_reason')->toArray();
+            }
+        }
+
+        // Cache total count (static per PHP process; news table changes infrequently)
+        static $cachedTotalCount = null;
+        if ($cachedTotalCount === null) {
+            $cachedTotalCount = News::count();
+        }
+        $totalCount = $cachedTotalCount;
+
         $newsData = [];
         foreach ($news as $item) {
-            // Get top 3 likers
-            $likers = NewsLike::where('News_ID', $item->id)
-                ->join('users', 'news_like.User_ID', '=', 'users.id')
-                ->select('users.ban_reason')
-                ->orderBy('news_like.CreatedAt', 'desc')
-                ->limit(3)
-                ->pluck('ban_reason')
-                ->toArray();
-
             $newsData[] = [
                 'id' => $item->id,
                 'image' => $item->Image,
@@ -68,11 +91,11 @@ class NewsController extends Controller
                 'createdAt' => $item->CreatedAt,
                 'views' => $item->Likes,
                 'isViewed' => (bool) $item->isliked,
-                'lastViewers' => $likers
+                'lastViewers' => $allLikers[$item->id] ?? []
             ];
         }
 
-        $totalPages = ceil(News::count() / $perPage);
+        $totalPages = ceil($totalCount / $perPage);
 
         return response()->json([
             'totalPages' => $totalPages,
@@ -118,8 +141,10 @@ class NewsController extends Controller
             ], 400);
         }
 
+        // Optimize: Select only id field
         $user = User::where('email', $request->email)
             ->where('account_status', 'active')
+            ->select('id')
             ->first();
 
         if (!$user) {

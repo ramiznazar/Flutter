@@ -171,10 +171,10 @@
                 </div>
                 @endif
 
-                <form action="{{ $editTask ? route('admin.tasks.update-onetime') : route('admin.tasks.store-onetime') }}" method="POST">
+                <form id="one-time-form" action="{{ $editTask ? route('admin.tasks.update-onetime') : route('admin.tasks.store-onetime') }}" method="POST">
                     @csrf
                     @if($editTask)
-                        <input type="hidden" name="task_id" value="{{ $editTask->id }}" />
+                        <input type="hidden" name="task_id" value="{{ $editTask->getKey() }}" />
                     @endif
                     
                     <div class="form-group mb-3">
@@ -257,10 +257,10 @@
                                 <td><a href="{{ $task->Link }}" target="_blank">View Link</a></td>
                                 <td><span class="badge badge-{{ $task->Status == 1 ? 'success' : 'secondary' }}">{{ $task->Status == 1 ? 'active' : 'inactive' }}</span></td>
                                 <td>
-                                    <a href="{{ route('admin.tasks.index', ['edit_id' => $task->id]) }}" class="btn btn-sm btn-primary">Edit</a>
-                                    <form action="{{ route('admin.tasks.destroy') }}" method="POST" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this task?');">
+                                    <a href="{{ route('admin.tasks.index', ['edit_id' => $task->getKey()]) }}#one-time-form" class="btn btn-sm btn-primary">Edit</a>
+                                    <form action="{{ route('admin.tasks.destroy') }}" method="POST" class="d-inline" onsubmit="return confirm('Are you sure you want to delete this task?');">
                                         @csrf
-                                        <input type="hidden" name="task_id" value="{{ $task->id }}" />
+                                        <input type="hidden" name="task_id" value="{{ $task->getKey() }}" />
                                         <button type="submit" class="btn btn-sm btn-danger">Delete</button>
                                     </form>
                                 </td>

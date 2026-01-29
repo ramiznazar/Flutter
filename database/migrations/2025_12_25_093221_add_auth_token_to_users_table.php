@@ -11,6 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::hasColumn('users', 'auth_token')) {
+            return;
+        }
         Schema::table('users', function (Blueprint $table) {
             $table->string('auth_token', 64)->nullable()->unique()->after('password');
         });

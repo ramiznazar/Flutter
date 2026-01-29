@@ -11,12 +11,23 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('giveaway', function (Blueprint $table) {
-            $table->decimal('reward', 10, 2)->default(0)->nullable()->after('description');
-            $table->dateTime('start_date')->nullable()->after('reward');
-            $table->dateTime('end_date')->nullable()->after('start_date');
-            $table->string('status', 50)->default('active')->nullable()->after('end_date');
-            $table->text('redirect_link')->nullable()->after('link');
+        $t = 'giveaway';
+        Schema::table($t, function (Blueprint $table) use ($t) {
+            if (!Schema::hasColumn($t, 'reward')) {
+                $table->decimal('reward', 10, 2)->default(0)->nullable()->after('description');
+            }
+            if (!Schema::hasColumn($t, 'start_date')) {
+                $table->dateTime('start_date')->nullable()->after('reward');
+            }
+            if (!Schema::hasColumn($t, 'end_date')) {
+                $table->dateTime('end_date')->nullable()->after('start_date');
+            }
+            if (!Schema::hasColumn($t, 'status')) {
+                $table->string('status', 50)->default('active')->nullable()->after('end_date');
+            }
+            if (!Schema::hasColumn($t, 'redirect_link')) {
+                $table->text('redirect_link')->nullable()->after('link');
+            }
         });
     }
 

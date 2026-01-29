@@ -252,7 +252,10 @@ class UserController extends Controller
             ], 400);
         }
 
-        $user = User::where('email', $request->email)->first();
+        // Optimize: Select only needed fields
+        $user = User::where('email', $request->email)
+            ->select('id', 'total_invite', 'join_date')
+            ->first();
 
         if (!$user) {
             return response()->json([
@@ -261,8 +264,10 @@ class UserController extends Controller
             ], 404);
         }
 
-        // Get user level data
-        $userLevel = UserLevel::where('user_id', $user->id)->first();
+        // Optimize: Select only needed fields from user_levels
+        $userLevel = UserLevel::where('user_id', $user->id)
+            ->select('current_level', 'mining_session')
+            ->first();
         $currentLevelId = $userLevel ? (int) $userLevel->current_level : 1;
         
         // Get user stats
@@ -270,8 +275,21 @@ class UserController extends Controller
         $totalInvite = (int) $user->total_invite;
         $accountAgeDays = $user->join_date ? \Carbon\Carbon::parse($user->join_date)->diffInDays(\Carbon\Carbon::now()) : 0;
         
-        // Get all levels
-        $allLevels = \App\Models\Level::orderBy('id', 'asc')->get();
+        // Cache all levels (levels table is static at runtime)
+        static $cachedAllLevels = null;
+        if ($cachedAllLevels === null) {
+            $cachedAllLevels = \App\Models\Level::orderBy('id', 'asc')->get();
+        }
+        $allLevels = $cachedAllLevels;
+
+        // Default perks object so the app never gets empty perks (fixes "Missing current_level or next_level")
+        $defaultPerks = [
+            'crutox_per_time' => 0.5,
+            'mining_time_hours' => 12,
+            'crutox_reward' => 0.0,
+            'other_access' => null,
+            'is_ads_block' => false
+        ];
         
         // Get current level
         $currentLevel = $allLevels->firstWhere('id', $currentLevelId);
@@ -283,15 +301,15 @@ class UserController extends Controller
         // Get next level
         $nextLevel = $allLevels->firstWhere('id', $currentLevelId + 1);
         
-        // Format current level perks (exclude spin wheel)
-        $currentLevelPerks = [];
+        // Format current level perks — always return object, never empty (app requires it)
+        $currentLevelPerks = $defaultPerks;
         if ($currentLevel) {
             $currentLevelPerks = [
-                'crutox_per_time' => (float) $currentLevel->perk_crutox_per_time,
-                'mining_time_hours' => (int) $currentLevel->perk_mining_time,
-                'crutox_reward' => (float) $currentLevel->perk_crutox_reward,
-                'other_access' => $currentLevel->perk_other_access,
-                'is_ads_block' => (bool) $currentLevel->is_ads_block
+                'crutox_per_time' => (float) ($currentLevel->perk_crutox_per_time ?? 0.5),
+                'mining_time_hours' => (int) ($currentLevel->perk_mining_time ?? 12),
+                'crutox_reward' => (float) ($currentLevel->perk_crutox_reward ?? 0),
+                'other_access' => $currentLevel->perk_other_access ?? null,
+                'is_ads_block' => (bool) ($currentLevel->is_ads_block ?? false)
             ];
         }
         
@@ -320,25 +338,69 @@ class UserController extends Controller
             ];
         }
         
-        // Format all levels data
+        // Format all levels data — ensure at least one so progress UI works
         $levelsData = [];
         foreach ($allLevels as $level) {
             $levelsData[] = [
                 'id' => $level->id,
-                'name' => $level->lvl_name,
+                'name' => $level->lvl_name ?? 'Level ' . $level->id,
                 'requirements' => [
-                    'mining_sessions' => (int) $level->mining_sessions,
-                    'total_invite' => (int) $level->total_invite,
-                    'account_age_days' => (int) $level->user_account_old
+                    'mining_sessions' => (int) ($level->mining_sessions ?? 0),
+                    'total_invite' => (int) ($level->total_invite ?? 0),
+                    'account_age_days' => (int) ($level->user_account_old ?? 0)
                 ],
                 'perks' => [
-                    'crutox_per_time' => (float) $level->perk_crutox_per_time,
-                    'mining_time_hours' => (int) $level->perk_mining_time,
-                    'crutox_reward' => (float) $level->perk_crutox_reward,
-                    'other_access' => $level->perk_other_access,
-                    'is_ads_block' => (bool) $level->is_ads_block
+                    'crutox_per_time' => (float) ($level->perk_crutox_per_time ?? 0.5),
+                    'mining_time_hours' => (int) ($level->perk_mining_time ?? 12),
+                    'crutox_reward' => (float) ($level->perk_crutox_reward ?? 0),
+                    'other_access' => $level->perk_other_access ?? null,
+                    'is_ads_block' => (bool) ($level->is_ads_block ?? false)
                 ],
                 'is_current' => $level->id == $currentLevelId
+            ];
+        }
+
+        // When no levels in DB, return one default level so app never gets empty all_levels or null next_level
+        if ($allLevels->isEmpty()) {
+            $levelsData = [[
+                'id' => 1,
+                'name' => 'Novice',
+                'requirements' => [
+                    'mining_sessions' => 0,
+                    'total_invite' => 0,
+                    'account_age_days' => 0
+                ],
+                'perks' => $defaultPerks,
+                'is_current' => true
+            ]];
+        }
+
+        // App requires both current_level and next_level to be present; use stub when at max level
+        $nextLevelPayload = null;
+        if ($nextLevel) {
+            $nextLevelPayload = [
+                'id' => $nextLevel->id,
+                'name' => $nextLevel->lvl_name ?? 'Level ' . $nextLevel->id,
+                'requirements' => $nextLevelRequirements,
+                'perks' => [
+                    'crutox_per_time' => (float) ($nextLevel->perk_crutox_per_time ?? 0.5),
+                    'mining_time_hours' => (int) ($nextLevel->perk_mining_time ?? 12),
+                    'crutox_reward' => (float) ($nextLevel->perk_crutox_reward ?? 0),
+                    'other_access' => $nextLevel->perk_other_access ?? null,
+                    'is_ads_block' => (bool) ($nextLevel->is_ads_block ?? false)
+                ]
+            ];
+        } else {
+            // At max level — return current as "next" so app sees valid next_level (no upgrade path)
+            $nextLevelPayload = [
+                'id' => $currentLevelId,
+                'name' => $currentLevel ? ($currentLevel->lvl_name ?? 'Novice') : 'Novice',
+                'requirements' => [
+                    'mining_sessions' => ['required' => 0, 'current' => $miningSessions, 'progress' => (string) $miningSessions . '/0', 'completed' => true],
+                    'total_invite' => ['required' => 0, 'current' => $totalInvite, 'progress' => (string) $totalInvite . '/0', 'completed' => true],
+                    'account_age_days' => ['required' => 0, 'current' => $accountAgeDays, 'progress' => (string) $accountAgeDays . '/0', 'completed' => true]
+                ],
+                'perks' => $currentLevelPerks
             ];
         }
 
@@ -347,21 +409,10 @@ class UserController extends Controller
             'data' => [
                 'current_level' => [
                     'id' => $currentLevelId,
-                    'name' => $currentLevel ? $currentLevel->lvl_name : 'Novice',
+                    'name' => $currentLevel ? ($currentLevel->lvl_name ?? 'Novice') : 'Novice',
                     'perks' => $currentLevelPerks
                 ],
-                'next_level' => $nextLevel ? [
-                    'id' => $nextLevel->id,
-                    'name' => $nextLevel->lvl_name,
-                    'requirements' => $nextLevelRequirements,
-                    'perks' => [
-                        'crutox_per_time' => (float) $nextLevel->perk_crutox_per_time,
-                        'mining_time_hours' => (int) $nextLevel->perk_mining_time,
-                        'crutox_reward' => (float) $nextLevel->perk_crutox_reward,
-                        'other_access' => $nextLevel->perk_other_access,
-                        'is_ads_block' => (bool) $nextLevel->is_ads_block
-                    ]
-                ] : null,
+                'next_level' => $nextLevelPayload,
                 'all_levels' => $levelsData,
                 'user_stats' => [
                     'mining_sessions' => $miningSessions,
@@ -385,7 +436,10 @@ class UserController extends Controller
             ], 400);
         }
 
-        $user = User::where('email', $request->email)->first();
+        // Select only fields we actually need to reduce payload
+        $user = User::where('email', $request->email)
+            ->select('id', 'total_invite', 'token', 'join_date')
+            ->first();
 
         if (!$user) {
             return response()->json([
@@ -395,14 +449,19 @@ class UserController extends Controller
         }
 
         // Get user level data
-        $userLevel = \App\Models\UserLevel::where('user_id', $user->id)->first();
+        $userLevel = \App\Models\UserLevel::where('user_id', $user->id)
+            ->select('mining_session', 'spin_wheel')
+            ->first();
         $miningSessions = $userLevel ? (int) $userLevel->mining_session : 0;
         $spinWheel = $userLevel ? (int) $userLevel->spin_wheel : 0;
         $totalInvite = (int) $user->total_invite;
         $token = (float) $user->token;
 
-        // Get total social media tasks
-        $totalSocialMediaTasks = \App\Models\SocialMediaSetting::count();
+        // Get total social media tasks (cached per PHP process; table changes very rarely)
+        static $totalSocialMediaTasks = null;
+        if ($totalSocialMediaTasks === null) {
+            $totalSocialMediaTasks = \App\Models\SocialMediaSetting::count();
+        }
         
         // Get completed social media tasks
         $completedSocialMediaTasks = \Illuminate\Support\Facades\DB::table('social_media_tokens')
@@ -411,8 +470,12 @@ class UserController extends Controller
             ->distinct()
             ->count();
 
-        // Get all badges
-        $badges = \App\Models\Badge::orderBy('id', 'asc')->get();
+        // Get all badges (cached per PHP process; badges table is static for runtime)
+        static $cachedBadges = null;
+        if ($cachedBadges === null) {
+            $cachedBadges = \App\Models\Badge::orderBy('id', 'asc')->get();
+        }
+        $badges = $cachedBadges;
         
         $earnedBadges = [];
 

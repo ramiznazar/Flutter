@@ -69,6 +69,51 @@ class MiningController extends Controller
         UserLevel::where('user_id', $userId)->increment('mining_session');
     }
 
+    /**
+     * Return coin settings or create a default row so the app never gets "Coin settings not found".
+     * mining_status and startMining depend on this; without a row they return 404.
+     */
+    private function getOrCreateCoinSettings(): CoinSetting
+    {
+        $c = CoinSetting::first();
+        if ($c) {
+            return $c;
+        }
+        // Some DBs have coin_settings.id without AUTO_INCREMENT; pass id explicitly.
+        return CoinSetting::create([
+            'id' => 1,
+            'seconds_per_coin' => 1,
+            'max_seconds_allow' => 86400,
+            'claim_time_in_sec' => 3600,
+            'max_coin_claim_allow' => 100,
+            'token' => 'CRUTOX',
+            'token_price' => 0.0004,
+        ]);
+    }
+
+    /**
+     * Ensure social_media_setting has a row for the given ID so social claim never gets "Invalid social media ID".
+     * Seeds defaults for IDs 1–4 (Twitter, Instagram, Telegram, Discord) when missing.
+     */
+    private function ensureSocialMediaRowExists(int $socialId): void
+    {
+        $defaults = [
+            1 => ['Name' => 'Twitter', 'Icon' => 'https://img.icons8.com/color/48/114450/twitter-circled', 'Link' => 'https://twitter.com/CrutoxApp', 'Token' => '2'],
+            2 => ['Name' => 'Instagram', 'Icon' => 'https://img.icons8.com/color/48/000000/instagram-new--v1.png', 'Link' => 'https://instagram.com/crutox', 'Token' => '2'],
+            3 => ['Name' => 'Telegram', 'Icon' => 'https://img.icons8.com/color/48/telegram-app', 'Link' => 'https://t.me/crutox', 'Token' => '2'],
+            4 => ['Name' => 'Discord', 'Icon' => 'https://img.icons8.com/color/48/discord', 'Link' => 'https://discord.gg/crutox', 'Token' => '2'],
+        ];
+        if ($socialId < 1 || $socialId > 4) {
+            return;
+        }
+        $pk = (new \App\Models\SocialMediaSetting)->getKeyName();
+        if (DB::table('social_media_setting')->where($pk, $socialId)->exists()) {
+            return;
+        }
+        $row = array_merge([$pk => $socialId], $defaults[$socialId]);
+        DB::table('social_media_setting')->insert($row);
+    }
+
     public function startMining(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -113,13 +158,7 @@ class MiningController extends Controller
 
         $currentTime = Carbon::now()->format('Y-m-d-H:i:s');
 
-        $coinSettings = CoinSetting::first();
-        if (!$coinSettings) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Coin settings not found'
-            ], 404);
-        }
+        $coinSettings = $this->getOrCreateCoinSettings();
 
         // Get settings for mining speed calculation
         $settings = \App\Models\Setting::first();
@@ -399,16 +438,10 @@ class MiningController extends Controller
             ], 404);
         }
 
-        $coinSettings = CoinSetting::first();
-        if (!$coinSettings) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Coin settings not found'
-            ], 404);
-        }
+        $coinSettings = $this->getOrCreateCoinSettings();
 
-        $claimTimeInSec = (int) $coinSettings->claim_time_in_sec;
-        $maxCoinClaimAllow = (int) $coinSettings->max_coin_claim_allow;
+        $claimTimeInSec = (int) ($coinSettings->claim_time_in_sec ?? 3600);
+        $maxCoinClaimAllow = (int) ($coinSettings->max_coin_claim_allow ?? 100);
         $currentTime = Carbon::now()->format('Y-m-d-H:i:s');
 
         if ($request->reason === 'get') {
@@ -483,71 +516,89 @@ class MiningController extends Controller
 
     public function socialClaim(Request $request)
     {
-        $validator = Validator::make($request->all(), [
-            'email' => 'required|email',
-            'ID' => 'required|integer',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Missing required fields'
-            ], 400);
-        }
-
-        $user = User::where('email', $request->email)->first();
-
-        if (!$user) {
-            return response()->json([
-                'success' => false,
-                'message' => 'User not found'
-            ], 404);
-        }
-
-        // Check if already claimed
-        $alreadyClaimed = \App\Models\SocialMediaToken::where('user_id', $user->id)
-            ->where('social_media_id', $request->ID)
-            ->exists();
-
-        if ($alreadyClaimed) {
-            return response()->json([
-                'success' => false,
-                'message' => 'User has already claimed tokens for this social media ID.'
-            ], 400);
-        }
-
-        $socialMedia = \App\Models\SocialMediaSetting::find($request->ID);
-
-        if (!$socialMedia) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Invalid social media ID.'
-            ], 404);
-        }
-
-        DB::beginTransaction();
-
         try {
-            // Add tokens to user
-            $user->increment('token', (float) $socialMedia->Token);
+            $socialId = $request->input('ID', $request->input('id'));
+            $email = $request->input('email');
 
-            // Record claim
-            \App\Models\SocialMediaToken::create([
-                'user_id' => $user->id,
-                'social_media_id' => $request->ID,
-            ]);
+            if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                return response()->json(['success' => false, 'message' => 'Valid email is required.'], 400);
+            }
+            if ($socialId === null || $socialId === '') {
+                return response()->json(['success' => false, 'message' => 'Social media ID is required.'], 400);
+            }
+            $socialId = (int) $socialId;
+            if ($socialId < 1) {
+                return response()->json(['success' => false, 'message' => 'Invalid social media ID.'], 400);
+            }
 
-            DB::commit();
+            $user = User::where('email', $email)->first();
+            if (!$user) {
+                return response()->json(['success' => false, 'message' => 'User not found.'], 404);
+            }
 
+            if (\App\Models\SocialMediaToken::where('user_id', $user->id)->where('social_media_id', $socialId)->exists()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Already claimed.',
+                    'new_balance' => (float) $user->token
+                ], 400);
+            }
+
+            $socialMedia = \App\Models\SocialMediaSetting::where('ID', $socialId)->first()
+                ?? \App\Models\SocialMediaSetting::where('id', $socialId)->first();
+            if (!$socialMedia) {
+                $this->ensureSocialMediaRowExists($socialId);
+                $socialMedia = \App\Models\SocialMediaSetting::where('ID', $socialId)->first()
+                    ?? \App\Models\SocialMediaSetting::where('id', $socialId)->first();
+            }
+            if (!$socialMedia) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid social media ID.',
+                    'new_balance' => (float) $user->token
+                ], 404);
+            }
+
+            $tokenReward = (float) ($socialMedia->Token ?? $socialMedia->token ?? 0);
+            if ($tokenReward <= 0) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No token value set for this reward.',
+                    'new_balance' => (float) $user->token
+                ], 400);
+            }
+
+            $pkVal = $socialMedia->ID ?? $socialMedia->id ?? $socialId;
+
+            DB::beginTransaction();
+            try {
+                $user->increment('token', $tokenReward);
+                \App\Models\SocialMediaToken::create([
+                    'user_id' => $user->id,
+                    'social_media_id' => $pkVal,
+                ]);
+                DB::commit();
+            } catch (\Throwable $e) {
+                DB::rollBack();
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Claim failed.',
+                    'new_balance' => (float) $user->token
+                ], 500);
+            }
+
+            $newBalance = (float) $user->fresh()->token;
             return response()->json([
                 'success' => true,
-                'message' => 'Tokens claimed successfully.'
+                'message' => 'Tokens claimed successfully.',
+                'tokens_added' => $tokenReward,
+                'new_balance' => $newBalance,
+                'balance' => $newBalance,
             ]);
-        } catch (\Exception $e) {
-            DB::rollBack();
+        } catch (\Throwable $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Token claim failed.'
+                'message' => 'Request failed.',
             ], 500);
         }
     }
@@ -565,7 +616,10 @@ class MiningController extends Controller
             ], 400);
         }
 
-        $user = User::where('email', $request->email)->first();
+        // Optimize: Select only id field
+        $user = User::where('email', $request->email)
+            ->select('id')
+            ->first();
 
         if (!$user) {
             return response()->json([
@@ -574,12 +628,25 @@ class MiningController extends Controller
             ], 404);
         }
 
-        $socialMediaList = \App\Models\SocialMediaSetting::leftJoin('social_media_tokens', function($join) use ($user) {
-                $join->on('social_media_setting.id', '=', 'social_media_tokens.social_media_id')
+        // Cache social media count check (table changes very rarely)
+        static $socialMediaCountChecked = false;
+        if (!$socialMediaCountChecked) {
+            if (\App\Models\SocialMediaSetting::count() === 0) {
+                foreach ([1, 2, 3, 4] as $id) {
+                    $this->ensureSocialMediaRowExists($id);
+                }
+            }
+            $socialMediaCountChecked = true;
+        }
+
+        $pk = (new \App\Models\SocialMediaSetting)->getKeyName();
+        $socialMediaList = \App\Models\SocialMediaSetting::leftJoin('social_media_tokens', function ($join) use ($user, $pk) {
+                $join->on('social_media_setting.' . $pk, '=', 'social_media_tokens.social_media_id')
                      ->where('social_media_tokens.user_id', '=', $user->id);
             })
             ->select('social_media_setting.*')
             ->selectRaw('CASE WHEN social_media_tokens.user_id IS NOT NULL THEN 1 ELSE 0 END AS claimed')
+            ->orderBy('social_media_setting.' . $pk)
             ->get();
 
         return response()->json([
@@ -781,6 +848,7 @@ class MiningController extends Controller
      * Get current mining status (for frontend polling)
      * This endpoint returns the current balance calculated by backend
      * Frontend should poll this every 5-10 seconds
+     * Optimized for performance to prevent timeouts
      */
     public function miningStatus(Request $request)
     {
@@ -795,8 +863,10 @@ class MiningController extends Controller
             ], 400);
         }
 
+        // Optimize: Select only needed columns from user
         $user = User::where('email', $request->email)
             ->where('account_status', 'active')
+            ->select('id', 'token', 'mining_start_balance', 'is_mining', 'mining_end_time', 'mining_time', 'custom_coin_speed', 'total_invite', 'coin')
             ->first();
 
         if (!$user) {
@@ -806,23 +876,77 @@ class MiningController extends Controller
             ], 404);
         }
 
-        $this->checkRecord($user->id);
-        $perks = $this->getUserPerks($user->id);
+        // Optimize: Combine checkRecord and getUserPerks into single query with join
+        $userLevel = UserLevel::where('user_id', $user->id)
+            ->leftJoin('level', 'user_levels.current_level', '=', 'level.id')
+            ->select(
+                'user_levels.current_level',
+                'level.perk_crutox_per_time',
+                'level.perk_mining_time'
+            )
+            ->first();
 
-        $timeLimitInSec = $perks['perk_mining_time'] * 3600;
-
-        $currentTime = Carbon::now()->format('Y-m-d-H:i:s');
-
-        $coinSettings = CoinSetting::first();
-        if (!$coinSettings) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Coin settings not found'
-            ], 404);
+        $perks = null;
+        if ($userLevel && $userLevel->current_level) {
+            $perks = [
+                'current_level' => $userLevel->current_level,
+                'perk_crutox_per_time' => (float) ($userLevel->perk_crutox_per_time ?? 0.5),
+                'perk_mining_time' => (int) ($userLevel->perk_mining_time ?? 12)
+            ];
+        } else {
+            // Create record if missing and get default level
+            $firstLevel = Level::select('id', 'perk_crutox_per_time', 'perk_mining_time')
+                ->orderBy('id')
+                ->first();
+            
+            if ($firstLevel) {
+                if (!$userLevel) {
+                    UserLevel::create([
+                        'user_id' => $user->id,
+                        'mining_session' => 0,
+                        'spin_wheel' => 0,
+                        'current_level' => $firstLevel->id,
+                        'achieved_at' => now()->format('Y-m-d H:i:s')
+                    ]);
+                }
+                $perks = [
+                    'current_level' => $firstLevel->id,
+                    'perk_crutox_per_time' => (float) $firstLevel->perk_crutox_per_time,
+                    'perk_mining_time' => (int) $firstLevel->perk_mining_time
+                ];
+            } else {
+                $perks = [
+                    'current_level' => 1,
+                    'perk_crutox_per_time' => 0.5,
+                    'perk_mining_time' => 12
+                ];
+            }
         }
 
-        // Get settings for mining speed calculation
-        $settings = \App\Models\Setting::first();
+        $timeLimitInSec = $perks['perk_mining_time'] * 3600;
+        $currentTime = Carbon::now()->format('Y-m-d-H:i:s');
+
+        // Optimize: Cache coin settings (they rarely change) - use static cache
+        static $cachedCoinSettings = null;
+        if ($cachedCoinSettings === null) {
+            $cachedCoinSettings = CoinSetting::select('token_price')->first();
+            if (!$cachedCoinSettings) {
+                // Create default if missing
+                CoinSetting::create([
+                    'id' => 1,
+                    'seconds_per_coin' => 1,
+                    'max_seconds_allow' => 86400,
+                    'claim_time_in_sec' => 3600,
+                    'max_coin_claim_allow' => 100,
+                    'token' => 'CRUTOX',
+                    'token_price' => 0.0004,
+                ]);
+                $cachedCoinSettings = (object)['token_price' => 0.0004];
+            }
+        }
+
+        // Optimize: Get settings with select to reduce data transfer
+        $settings = \App\Models\Setting::select('mining_speed')->first();
         $overallMiningSpeed = $settings ? (float) $settings->mining_speed : 10.00;
         
         // Check if user has custom coin speed
@@ -830,13 +954,13 @@ class MiningController extends Controller
         $effectiveMiningSpeed = $userCustomSpeed ?? $overallMiningSpeed;
         
         // Calculate token_per_sec directly from mining speed (coins per hour)
-        // mining_speed represents coins per hour, so divide by 3600 to get coins per second
         $tokenPerSec = (float) $effectiveMiningSpeed / 3600;
 
-        // Get active booster and apply multiplier
+        // Optimize: Get active booster with select and limit
         $booster = \App\Models\UserBooster::where('user_id', $user->id)
             ->where('is_active', 1)
             ->where('expires_at', '>', Carbon::now())
+            ->select('booster_type', 'expires_at')
             ->orderBy('created_at', 'desc')
             ->first();
 
@@ -855,18 +979,15 @@ class MiningController extends Controller
             $tokenPerSec = $tokenPerSec * $boosterMultiplier;
         }
 
-        $usdt = (float) $coinSettings->token_price;
+        $usdt = (float) ($cachedCoinSettings->token_price ?? 0.0004);
 
-        // Get current balance from database (updated by scheduled job)
-        // IMPORTANT: Refresh the user model to get the latest token value from database
-        // The scheduled job updates the token field, so we need fresh data
-        $user->refresh();
+        // No need to refresh - we already have the latest token value from select
         $currentBalance = (float) $user->token;
-        $startingBalance = $user->mining_start_balance !== null 
-            ? (float) $user->mining_start_balance 
+        $startingBalance = $user->mining_start_balance !== null
+            ? (float) $user->mining_start_balance
             : $currentBalance;
 
-        // Calculate mining status
+        // Calculate mining status and elapsed/remaining
         $isMining = $user->is_mining == 1 && $user->mining_end_time;
         $miningStatus = 'idle';
         $miningEndTime = null;
@@ -875,20 +996,47 @@ class MiningController extends Controller
         $totalMiningTimeInSec = 0;
 
         if ($isMining) {
-            $miningStatus = 'in_progress';
             $miningEndTime = $user->mining_end_time;
             $miningEndTimeCarbon = Carbon::createFromFormat('Y-m-d-H:i:s', $user->mining_end_time);
             $now = Carbon::now();
-            
+
             if ($now->gt($miningEndTimeCarbon)) {
-                // Mining completed (scheduled job should handle this, but return status)
-                $miningStatus = 'completed';
-                $secondsRemaining = 0;
-                $elapsedSeconds = (int) ($user->mining_time ?? $timeLimitInSec);
+                // Session ended while app was closed — complete mining and persist final balance now
+                $totalMiningTimeInSec = (int) ($user->mining_time ?? $timeLimitInSec);
+                $calculatedFinal = $startingBalance + ($tokenPerSec * $totalMiningTimeInSec);
+                // Never decrease balance: keep any extra from social claim / admin credit during the session
+                $finalBalance = max($calculatedFinal, $currentBalance);
+                
+                // Optimize: Use update with only changed fields
+                User::where('id', $user->id)->update([
+                    'token' => $finalBalance,
+                    'is_mining' => 0,
+                    'mining_end_time' => null,
+                    'mining_time' => 0,
+                    'mining_start_balance' => null
+                ]);
+                
+                // Optimize: Only increment if record exists (avoid checkRecord call)
+                UserLevel::where('user_id', $user->id)->increment('mining_session');
+                
+                $currentBalance = $finalBalance;
+                $miningStatus = 'idle';
+                $miningEndTime = null;
+                $elapsedSeconds = $totalMiningTimeInSec;
             } else {
+                $miningStatus = 'in_progress';
                 $secondsRemaining = $now->diffInSeconds($miningEndTimeCarbon);
                 $totalMiningTimeInSec = (int) ($user->mining_time ?? $timeLimitInSec);
                 $elapsedSeconds = $totalMiningTimeInSec - $secondsRemaining;
+                // Recalculate and persist balance so it is up-to-date when user resumes app.
+                // Never decrease stored balance: keep any extra from social claim / admin credit.
+                $calculated = $startingBalance + ($tokenPerSec * $elapsedSeconds);
+                $currentBalance = max($calculated, $currentBalance);
+                
+                // Optimize: Only update if balance changed
+                if (abs($currentBalance - (float) $user->token) > 0.0001) {
+                    User::where('id', $user->id)->update(['token' => $currentBalance]);
+                }
             }
         }
 

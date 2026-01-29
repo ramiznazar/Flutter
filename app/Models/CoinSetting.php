@@ -18,6 +18,7 @@ class CoinSetting extends Model
     public $timestamps = false; // Disable timestamps for settings
 
     protected $fillable = [
+        'id',
         'seconds_per_coin', 'max_seconds_allow', 'claim_time_in_sec',
         'max_coin_claim_allow', 'token', 'token_price'
     ];

@@ -1,5 +1,36 @@
 # Flutter Frontend Integration Guide - Backend-Managed Mining
 
+## 🚀 App startup / config — GET /api/admin/settings_manage
+
+The Crutox app calls **GET** `https://admin.crutox.com/api/admin/settings_manage` at startup and validates the response.
+
+**Required response:** HTTP **200**, body:
+
+```json
+{ "success": true, "data": { ... } }
+```
+
+- `success` must be boolean `true` (false or missing → app shows "Failed to load settings").
+- `data` must be an object; all settings come from `data`. App maps it with `AppSettings.fromJson(data)`.
+
+**Maintenance / update (backend keeps these so the app never blocks):**
+
+| Key | Type | Meaning |
+|-----|------|--------|
+| `maintenance` | int | 1 = maintenance mode, 0 = normal. Backend always sends **0**. |
+| `maintenance_message` | string | Shown when maintenance is 1. |
+| `force_update` | int | 1 = force update, 0 = optional. Backend always sends **0**. |
+| `update_version` | string | Must match the app version (e.g. `"1.1.9"`). App compares to `packageInfo.version`; when equal, no update sheet. **Do not send empty string** — the app formats it to `".0.0"` and still shows the sheet. Set `MOBILE_APP_VERSION` in `.env` or `config/app.php` to match `pubspec.yaml` version. |
+| `update_message` | string | Shown on "Update available" screen. |
+| `update_link` | string | URL for "Update Now". |
+
+**Other keys in `data` (snake_case):**  
+`id`, `pirvacy_policy_link` (app typo — backend must use this key), `term_n_condition_link`, `support_email`, `faq_link`, `white_paper_link`, `road_map_link`, `about_us_link`, `mining_speed`, `base_mining_rate`, `max_mining_speed`, `referrer_reward`, `referee_reward`, `max_referrals`, `bonus_reward`, `current_users`, `goal_users`, `daily_tasks_reset_time`, `common_box_*`, `rare_box_*`, `epic_box_*`, `legendary_box_*`, `kyc_mining_sessions`, `kyc_referrals_required`, `ad_waterfall_order`, `ad_waterfall_enabled`. Missing keys default to `''` or `0` in the app.
+
+**Backend behavior:** `SettingsManageController::index()` always returns `maintenance: 0` and `force_update: 0`, and `update_version` from `config('app.mobile_app_version', '1.1.9')` so it matches the current app and the "Update available" sheet does not show. Set `MOBILE_APP_VERSION=1.1.9` (or your pubspec version) in `.env` and bump it when you release a new build. Use `?format=array` to get `[{ ... }]` instead of `{ "success": true, "data": {...} }`.
+
+---
+
 ## 📋 Overview
 
 The mining system has been updated to be **backend-managed**. The backend now calculates and stores all mining balances, including booster multipliers. The frontend should **poll** the backend for balance updates instead of calculating locally.

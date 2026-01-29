@@ -220,6 +220,7 @@
                                 <th>Email</th>
                                 <th>Name</th>
                                 <th>Username</th>
+                                <th>Token</th>
                                 <th>Coins</th>
                                 <th>Active Booster</th>
                                 <th>Mystery Box Data</th>
@@ -234,6 +235,16 @@
                                 <td>{{ $user->email }}</td>
                                 <td>{{ $user->name }}</td>
                                 <td>{{ $user->username ?: 'N/A' }}</td>
+                                <td>
+                                    @php
+                                        $token = $user->auth_token ?? $user->token ?? null;
+                                    @endphp
+                                    @if($token)
+                                        <code class="d-inline-block text-break" style="max-width: 200px; font-size: 0.85em;" title="{{ $token }}">{{ Str::limit($token, 24) }}</code>
+                                    @else
+                                        <span class="text-muted">N/A</span>
+                                    @endif
+                                </td>
                                 <td>{{ number_format((float)$user->coin, 2) }}</td>
                                 <td>
                                     @if($user->active_booster)
@@ -279,7 +290,7 @@
                             </tr>
                             @empty
                             <tr>
-                                <td colspan="9" class="text-center">No users found.</td>
+                                <td colspan="10" class="text-center">No users found.</td>
                             </tr>
                             @endforelse
                         </tbody>

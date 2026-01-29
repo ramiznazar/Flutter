@@ -125,11 +125,13 @@ Route::post('/spin', [SpinController::class, 'spin']);
 Route::post('/spin_claim', [SpinController::class, 'spinClaim']);
 Route::post('/get_myspin_info', [SpinController::class, 'getMySpinInfo']);
 
-// Settings Routes
+// Settings Routes (GET other_settings = same as POST, for app startup / Flutter)
+Route::get('/other_settings', [SettingsController::class, 'otherSettings']);
 Route::post('/other_settings', [SettingsController::class, 'otherSettings']);
 Route::post('/get_currencies', [SettingsController::class, 'getCurrencies']);
 Route::get('/getTotalUsers', [SettingsController::class, 'getTotalUsers']);
 Route::post('/time', [SettingsController::class, 'time']);
+Route::get('/ads', [SettingsController::class, 'ads']);
 Route::post('/ads', [SettingsController::class, 'ads']);
 
 // Utility Routes

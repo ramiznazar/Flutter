@@ -8,9 +8,13 @@ return new class extends Migration
 {
     /**
      * Run the migrations.
+     * Idempotent: safe to run when column already exists.
      */
     public function up(): void
     {
+        if (Schema::hasColumn('admin', 'remember_token')) {
+            return;
+        }
         Schema::table('admin', function (Blueprint $table) {
             $table->rememberToken()->nullable()->after('last_login');
         });

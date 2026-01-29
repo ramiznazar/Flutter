@@ -60,6 +60,13 @@
                 <li class="menu-title">Settings</li>
 
                 <li>
+                    <a href="{{ route('admin.app-settings') }}" class="waves-effect {{ request()->routeIs('admin.app-settings') ? 'active' : '' }}">
+                        <i class="mdi mdi-tune"></i>
+                        <span> App Settings </span>
+                    </a>
+                </li>
+
+                <li>
                     <a href="{{ route('admin.mining-settings') }}" class="waves-effect {{ request()->routeIs('admin.mining-settings') ? 'active' : '' }}">
                         <i class="mdi mdi-speedometer"></i>
                         <span> Mining Speed Settings </span>

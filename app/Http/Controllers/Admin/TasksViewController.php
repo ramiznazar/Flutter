@@ -138,12 +138,7 @@ class TasksViewController extends Controller
             $this->ensureSettingsColumnExists('daily_tasks_reset_time');
 
             // Update reset time
-            $settings = Setting::first();
-            if ($settings) {
-                $settings->update(['daily_tasks_reset_time' => $request->reset_time]);
-            } else {
-                Setting::create(['daily_tasks_reset_time' => $request->reset_time]);
-            }
+            Setting::updateOrCreateSettings(['daily_tasks_reset_time' => $request->reset_time]);
 
             DB::commit();
 
@@ -239,7 +234,7 @@ class TasksViewController extends Controller
     public function destroy(Request $request)
     {
         $request->validate([
-            'task_id' => 'required|integer|exists:social_media_setting,id',
+            'task_id' => 'required|integer|exists:social_media_setting,ID',
         ]);
 
         $task = SocialMediaSetting::findOrFail($request->task_id);

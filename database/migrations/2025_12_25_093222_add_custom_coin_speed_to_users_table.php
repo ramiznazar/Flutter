@@ -11,6 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::hasColumn('users', 'custom_coin_speed')) {
+            return;
+        }
         Schema::table('users', function (Blueprint $table) {
             $table->decimal('custom_coin_speed', 10, 2)->nullable()->after('token')->comment('Custom coin speed for individual user, null means use overall settings');
         });
