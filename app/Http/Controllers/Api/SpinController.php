@@ -37,7 +37,7 @@ class SpinController extends Controller
             ], 400);
         }
 
-        $user = \App\Models\User::where('email', $email)->first();
+        $user = \App\Models\User::where('email', $email)->select('id')->first();
 
         if (!$user) {
             return response()->json([
@@ -46,7 +46,7 @@ class SpinController extends Controller
             ], 404);
         }
 
-        $spinSetting = \App\Models\SpinSetting::first();
+        $spinSetting = \App\Models\SpinSetting::select('MaxLimit', 'Time', 'AdType', 'ShowAd', 'SpinShow')->first();
         
         if (!$spinSetting) {
             return response()->json([

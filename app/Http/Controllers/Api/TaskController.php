@@ -29,9 +29,10 @@ class TaskController extends Controller
             ], 400);
         }
 
-        // Validate user
+        // Validate user — select only id
         $user = User::where('email', $request->email)
             ->where('account_status', 'active')
+            ->select('id')
             ->first();
 
         if (!$user) {
@@ -41,8 +42,8 @@ class TaskController extends Controller
             ], 404);
         }
 
-        // Check if task exists
-        $task = SocialMediaSetting::where('ID', $request->task_id)->first();
+        // Check if task exists — select only columns used
+        $task = SocialMediaSetting::where('ID', $request->task_id)->select('ID', 'Token', 'Status')->first();
 
         if (!$task) {
             // Get available task IDs for better error message
@@ -171,9 +172,10 @@ class TaskController extends Controller
             ], 400);
         }
 
-        // Validate user
+        // Validate user — select only id and token (for increment)
         $user = User::where('email', $request->email)
             ->where('account_status', 'active')
+            ->select('id', 'token')
             ->first();
 
         if (!$user) {
@@ -183,8 +185,8 @@ class TaskController extends Controller
             ], 404);
         }
 
-        // Get task reward
-        $task = SocialMediaSetting::where('ID', $request->task_id)->first();
+        // Get task reward — select only columns used
+        $task = SocialMediaSetting::where('ID', $request->task_id)->select('ID', 'Token')->first();
 
         if (!$task) {
             // Get available task IDs for better error message
@@ -292,6 +294,7 @@ class TaskController extends Controller
 
         $user = User::where('email', $request->email)
             ->where('account_status', 'active')
+            ->select('id')
             ->first();
 
         if (!$user) {
@@ -301,7 +304,7 @@ class TaskController extends Controller
             ], 404);
         }
 
-        $task = SocialMediaSetting::where('ID', $request->task_id)->first();
+        $task = SocialMediaSetting::where('ID', $request->task_id)->select('ID')->first();
 
         if (!$task) {
             // Get available task IDs for better error message
@@ -365,6 +368,7 @@ class TaskController extends Controller
 
         $user = User::where('email', $request->email)
             ->where('account_status', 'active')
+            ->select('id')
             ->first();
 
         if (!$user) {
@@ -374,36 +378,49 @@ class TaskController extends Controller
             ], 404);
         }
 
-        // Get daily tasks (first 3 tasks)
+        // Get daily tasks (first 3) — select only columns used in response
         $tasks = SocialMediaSetting::orderBy('ID', 'asc')
             ->limit(3)
+            ->select('ID', 'Name', 'Token', 'Link', 'Icon')
             ->get();
 
         $now = Carbon::now();
         $twentyFourHoursAgo = $now->copy()->subHours(24);
+        $taskIds = $tasks->pluck('ID')->toArray();
 
-        // Get user's task completions
+        // Get user's task completions (claimed in last 24h)
         $completions = TaskCompletion::where('user_id', $user->id)
             ->where('task_type', 'daily')
-            ->whereIn('task_id', $tasks->pluck('ID'))
+            ->whereIn('task_id', $taskIds)
             ->where('reward_claimed', 1)
             ->where('reward_claimed_at', '>=', $twentyFourHoursAgo)
+            ->select('task_id', 'reward_claimed_at')
+            ->get()
+            ->keyBy('task_id');
+
+        // Get all in-progress (unclaimed) completions in one query to avoid N+1
+        $inProgressCompletions = TaskCompletion::where('user_id', $user->id)
+            ->where('task_type', 'daily')
+            ->whereIn('task_id', $taskIds)
+            ->where('reward_claimed', 0)
+            ->select('task_id', 'reward_available_at')
+            ->orderBy('created_at', 'desc')
             ->get()
             ->keyBy('task_id');
 
         // Format tasks with status
-        $tasksWithStatus = $tasks->map(function($task) use ($user, $completions, $now) {
+        $tasksWithStatus = $tasks->map(function($task) use ($user, $completions, $inProgressCompletions, $now) {
             $taskId = $task->ID;
             $completion = $completions->get($taskId);
+            $inProgress = $inProgressCompletions->get($taskId);
             
-            $status = 'available'; // available, in_progress, claimable, claimed
+            $status = 'available';
             $rewardAvailable = false;
             $secondsRemaining = 0;
             $nextAvailableAt = null;
             $secondsUntilAvailable = 0;
 
             if ($completion) {
-                // Task was claimed within 24 hours
                 $claimedAt = Carbon::parse($completion->reward_claimed_at);
                 $nextAvailable = $claimedAt->copy()->addHours(24);
                 
@@ -414,25 +431,15 @@ class TaskController extends Controller
                 } else {
                     $status = 'available';
                 }
-            } else {
-                // Check if there's an unclaimed task in progress
-                $inProgress = TaskCompletion::where('user_id', $user->id)
-                    ->where('task_id', $taskId)
-                    ->where('task_type', 'daily')
-                    ->where('reward_claimed', 0)
-                    ->orderBy('created_at', 'desc')
-                    ->first();
-
-                if ($inProgress) {
-                    $availableAt = Carbon::parse($inProgress->reward_available_at);
-                    
-                    if ($now >= $availableAt) {
-                        $status = 'claimable';
-                        $rewardAvailable = true;
-                    } else {
-                        $status = 'in_progress';
-                        $secondsRemaining = $now->diffInSeconds($availableAt);
-                    }
+            } elseif ($inProgress) {
+                $availableAt = Carbon::parse($inProgress->reward_available_at);
+                
+                if ($now >= $availableAt) {
+                    $status = 'claimable';
+                    $rewardAvailable = true;
+                } else {
+                    $status = 'in_progress';
+                    $secondsRemaining = $now->diffInSeconds($availableAt);
                 }
             }
 

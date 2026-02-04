@@ -110,30 +110,52 @@ class SettingsController extends Controller
 
     public function ads(Request $request)
     {
-        $adsSetting = \App\Models\AdsSetting::first();
+        // Every key as string (never null) so Flutter AdsModel.fromJson never gets "type 'Null' is not a subtype of type 'String'" at line 31
+        // Include id and admob_inter_id, meta_inter_id, unity_inter_id per frontend spec (Issue #4)
+        $data = [
+            'id' => '1',
+            'applovin_sdk_key' => '',
+            'applovin_inter_id' => '',
+            'applovin_reward_id' => '',
+            'applovin_native_id' => '',
+            'applovin_banner_id' => '',
+            'applovin_app_open_id' => '',
+            'applovin_mrec_id' => '',
+            'admob_app_id' => '',
+            'admob_banner_id' => '',
+            'admob_interstitial_id' => '',
+            'admob_inter_id' => '',
+            'admob_rewarded_id' => '',
+            'admod_inter_id' => '',
+            'meta_inter_id' => '',
+            'facebook_inter_id' => '',
+            'unity_inter_id' => '',
+            'unity_ads_game_id' => '',
+            'chartboost_app_id' => '',
+            'vungle_app_id' => '',
+            'iron_source_app_key' => '',
+            'status' => '0',
+        ];
 
-        if (!$adsSetting) {
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'applovin_sdk_key' => '',
-                    'applovin_inter_id' => '',
-                    'applovin_reward_id' => '',
-                    'applovin_native_id' => '',
-                    'status' => 0
-                ]
-            ], 200);
+        $adsSetting = \App\Models\AdsSetting::select('id', 'applovin_sdk_key', 'applovin_inter_id', 'applovin_reward_id', 'applovin_native_id', 'status')->first();
+        if ($adsSetting) {
+            $data['id'] = (string) ($adsSetting->id ?? '1');
+            $data['applovin_sdk_key'] = (string) ($adsSetting->applovin_sdk_key ?? '');
+            $data['applovin_inter_id'] = (string) ($adsSetting->applovin_inter_id ?? '');
+            $data['applovin_reward_id'] = (string) ($adsSetting->applovin_reward_id ?? '');
+            $data['applovin_native_id'] = (string) ($adsSetting->applovin_native_id ?? '');
+            $data['status'] = (string) (($adsSetting->status !== null && $adsSetting->status !== '') ? (int) $adsSetting->status : 0);
         }
 
-        return response()->json([
+        // Ensure no key is ever null (Flutter casts to String)
+        $data = array_map(function ($v) {
+            return $v === null ? '' : (is_int($v) ? (string) $v : $v);
+        }, $data);
+
+        // Return data wrapped; also merge data keys at root so if Flutter uses fromJson(fullResponse) it still gets all keys (no null)
+        return response()->json(array_merge([
             'success' => true,
-            'data' => [
-                'applovin_sdk_key' => (string) ($adsSetting->applovin_sdk_key ?? ''),
-                'applovin_inter_id' => (string) ($adsSetting->applovin_inter_id ?? ''),
-                'applovin_reward_id' => (string) ($adsSetting->applovin_reward_id ?? ''),
-                'applovin_native_id' => (string) ($adsSetting->applovin_native_id ?? ''),
-                'status' => (int) ($adsSetting->status ?? 0)
-            ]
-        ]);
+            'data' => $data
+        ], $data), 200);
     }
 }

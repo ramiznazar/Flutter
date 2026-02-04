@@ -88,6 +88,10 @@ Route::post('/mystery_box_click', [MysteryBoxController::class, 'click']);
 Route::post('/mystery_box_open', [MysteryBoxController::class, 'open']);
 Route::post('/mystery_box_details', [MysteryBoxController::class, 'getDetails']);
 
+// Ad Booster Routes (watch ad → get speed booster, 8hr cooldown, max 3 per day)
+Route::post('/ad_booster_status', [\App\Http\Controllers\Api\AdBoosterController::class, 'status']);
+Route::post('/ad_booster_claim', [\App\Http\Controllers\Api\AdBoosterController::class, 'claim']);
+
 // KYC Routes
 Route::post('/kyc_check_eligibility', [KycController::class, 'checkEligibility']);
 Route::match(['get', 'post'], '/kyc_submit', function(Request $request) {

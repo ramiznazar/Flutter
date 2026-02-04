@@ -24,7 +24,9 @@ class UserController extends Controller
             ], 400);
         }
 
-        $user = User::where('email', $request->email)->first();
+        $user = User::where('email', $request->email)
+            ->select('id', 'email', 'total_invite')
+            ->first();
 
         if (!$user) {
             return response()->json([
@@ -33,7 +35,7 @@ class UserController extends Controller
             ], 404);
         }
 
-        $userLevel = UserLevel::where('user_id', $user->id)->first();
+        $userLevel = UserLevel::where('user_id', $user->id)->select('mining_session')->first();
         $miningSessions = $userLevel ? (int) $userLevel->mining_session : 0;
 
         return response()->json([
@@ -170,7 +172,9 @@ class UserController extends Controller
             ], 400);
         }
 
-        $user = User::where('email', $request->email)->first();
+        $user = User::where('email', $request->email)
+            ->select('id', 'username', 'total_invite')
+            ->first();
 
         if (!$user) {
             return response()->json([
@@ -182,6 +186,7 @@ class UserController extends Controller
         // Get users referred by this user (users with invite_setup matching this user's id or username)
         $referrals = User::where('invite_setup', $user->id)
             ->orWhere('invite_setup', $user->username)
+            ->select('id', 'name', 'email', 'username', 'token', 'total_invite', 'join_date', 'last_active', 'is_mining', 'mining_end_time', 'ban_reason')
             ->get();
 
         $now = Carbon::now();
@@ -407,6 +412,7 @@ class UserController extends Controller
         return response()->json([
             'success' => true,
             'data' => [
+                'level' => $currentLevelId,
                 'current_level' => [
                     'id' => $currentLevelId,
                     'name' => $currentLevel ? ($currentLevel->lvl_name ?? 'Novice') : 'Novice',
@@ -436,7 +442,6 @@ class UserController extends Controller
             ], 400);
         }
 
-        // Select only fields we actually need to reduce payload
         $user = User::where('email', $request->email)
             ->select('id', 'total_invite', 'token', 'join_date')
             ->first();
@@ -448,91 +453,114 @@ class UserController extends Controller
             ], 404);
         }
 
-        // Get user level data
+        // Ensure user_levels row exists so mining_session/spin_wheel are always defined
         $userLevel = \App\Models\UserLevel::where('user_id', $user->id)
             ->select('mining_session', 'spin_wheel')
             ->first();
+        if (!$userLevel) {
+            $firstLevel = \App\Models\Level::orderBy('id')->first();
+            if ($firstLevel) {
+                \App\Models\UserLevel::create([
+                    'user_id' => $user->id,
+                    'mining_session' => 0,
+                    'spin_wheel' => 0,
+                    'current_level' => $firstLevel->id,
+                    'achieved_at' => now()->format('Y-m-d H:i:s'),
+                ]);
+            }
+            $userLevel = \App\Models\UserLevel::where('user_id', $user->id)->select('mining_session', 'spin_wheel')->first();
+        }
+
         $miningSessions = $userLevel ? (int) $userLevel->mining_session : 0;
         $spinWheel = $userLevel ? (int) $userLevel->spin_wheel : 0;
         $totalInvite = (int) $user->total_invite;
         $token = (float) $user->token;
 
-        // Get total social media tasks (cached per PHP process; table changes very rarely)
         static $totalSocialMediaTasks = null;
         if ($totalSocialMediaTasks === null) {
-            $totalSocialMediaTasks = \App\Models\SocialMediaSetting::count();
+            $totalSocialMediaTasks = (int) \App\Models\SocialMediaSetting::count();
         }
-        
-        // Get completed social media tasks
-        $completedSocialMediaTasks = \Illuminate\Support\Facades\DB::table('social_media_tokens')
+        $completedSocialMediaTasks = (int) \Illuminate\Support\Facades\DB::table('social_media_tokens')
             ->where('user_id', $user->id)
             ->select('social_media_id')
             ->distinct()
             ->count();
 
-        // Get all badges (cached per PHP process; badges table is static for runtime)
         static $cachedBadges = null;
         if ($cachedBadges === null) {
             $cachedBadges = \App\Models\Badge::orderBy('id', 'asc')->get();
         }
         $badges = $cachedBadges;
-        
         $earnedBadges = [];
 
-        // Add "Account Created" badge first
         $accountCreatedBadge = $badges->firstWhere('badge_name', 'Newbie Explorer: Once User Creates Account');
+        $firstIcon = null;
+        if ($accountCreatedBadge && isset($accountCreatedBadge->badges_icon) && trim((string) $accountCreatedBadge->badges_icon) !== '') {
+            $firstIcon = (string) trim($accountCreatedBadge->badges_icon);
+        }
         $earnedBadges[] = [
             'title' => 'Newbie Explorer: Once User Creates Account',
-            'earned' => $user->join_date ? true : false,
+            'earned' => !empty($user->join_date),
             'progress' => null,
             'total' => null,
-            'badges_icon' => $accountCreatedBadge ? $accountCreatedBadge->badges_icon : null
+            'badges_icon' => $firstIcon,
         ];
 
-        // Process other badges
         foreach ($badges as $badge) {
-            // Skip the account created badge as it's already processed
             if ($badge->badge_name === 'Newbie Explorer: Once User Creates Account') {
                 continue;
             }
 
             $badgeData = [
-                'title' => $badge->badge_name,
+                'title' => (string) ($badge->badge_name ?? ''),
                 'earned' => false,
                 'progress' => null,
                 'total' => null,
-                'badges_icon' => $badge->badges_icon
+                'badges_icon' => null,
             ];
 
-            // Check badge requirements
-            if ($badge->mining_sessions_required !== null) {
-                $badgeData['progress'] = $miningSessions;
-                $badgeData['total'] = $badge->mining_sessions_required;
-                $badgeData['earned'] = $miningSessions >= $badge->mining_sessions_required;
-            } elseif ($badge->spin_wheel_required !== null) {
-                $badgeData['progress'] = $spinWheel;
-                $badgeData['total'] = $badge->spin_wheel_required;
-                $badgeData['earned'] = $spinWheel >= $badge->spin_wheel_required;
-            } elseif ($badge->invite_friends_required !== null) {
-                $badgeData['progress'] = $totalInvite;
-                $badgeData['total'] = $badge->invite_friends_required;
-                $badgeData['earned'] = $totalInvite >= $badge->invite_friends_required;
-            } elseif ($badge->crutox_in_wallet_required !== null) {
-                $badgeData['progress'] = $token;
-                $badgeData['total'] = $badge->crutox_in_wallet_required;
-                $badgeData['earned'] = $token >= $badge->crutox_in_wallet_required;
-            } elseif ($badge->social_media_task_completed) {
-                $badgeData['progress'] = $completedSocialMediaTasks;
-                $badgeData['total'] = $totalSocialMediaTasks;
-                $badgeData['earned'] = $completedSocialMediaTasks >= $totalSocialMediaTasks && $totalSocialMediaTasks > 0;
+            $miningReq = $badge->mining_sessions_required;
+            $spinReq = $badge->spin_wheel_required;
+            $inviteReq = $badge->invite_friends_required;
+            $crutoxReq = $badge->crutox_in_wallet_required;
+            $socialReq = (int) ($badge->social_media_task_completed ?? 0);
+
+            if ($miningReq !== null && $miningReq !== '') {
+                $req = (int) $miningReq;
+                $badgeData['progress'] = (int) $miningSessions;
+                $badgeData['total'] = (int) $req;
+                $badgeData['earned'] = $miningSessions >= $req;
+            } elseif ($spinReq !== null && $spinReq !== '') {
+                $req = (int) $spinReq;
+                $badgeData['progress'] = (int) $spinWheel;
+                $badgeData['total'] = (int) $req;
+                $badgeData['earned'] = $spinWheel >= $req;
+            } elseif ($inviteReq !== null && $inviteReq !== '') {
+                $req = (int) $inviteReq;
+                $badgeData['progress'] = (int) $totalInvite;
+                $badgeData['total'] = (int) $req;
+                $badgeData['earned'] = $totalInvite >= $req;
+            } elseif ($crutoxReq !== null && $crutoxReq !== '') {
+                $req = (float) $crutoxReq;
+                $badgeData['progress'] = (float) round($token, 2);
+                $badgeData['total'] = (float) $req;
+                $badgeData['earned'] = $token >= $req;
+            } elseif ($socialReq !== 0) {
+                $badgeData['progress'] = (int) $completedSocialMediaTasks;
+                $badgeData['total'] = (int) $totalSocialMediaTasks;
+                $badgeData['earned'] = $totalSocialMediaTasks > 0 && $completedSocialMediaTasks >= $totalSocialMediaTasks;
             }
+
+            $badgeData['badges_icon'] = isset($badge->badges_icon) && trim((string) $badge->badges_icon) !== ''
+                ? (string) trim($badge->badges_icon)
+                : null;
 
             $earnedBadges[] = $badgeData;
         }
 
         return response()->json([
             'success' => true,
-            'data' => $earnedBadges
+            'data' => $earnedBadges,
         ]);
     }
 
@@ -561,6 +589,7 @@ class UserController extends Controller
 
         $user = User::where('email', $request->email)
             ->where('account_status', 'active')
+            ->select('id')
             ->first();
 
         if (!$user) {

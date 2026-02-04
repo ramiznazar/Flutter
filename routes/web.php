@@ -57,6 +57,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('/referral-settings', [\App\Http\Controllers\Admin\SettingsViewController::class, 'updateReferralSettings'])->name('referral-settings.update');
         Route::get('/mystery-box', [\App\Http\Controllers\Admin\SettingsViewController::class, 'mysteryBoxSettings'])->name('mystery-box');
         Route::post('/mystery-box', [\App\Http\Controllers\Admin\SettingsViewController::class, 'updateMysteryBoxSettings'])->name('mystery-box.update');
+        Route::get('/ad-booster', [\App\Http\Controllers\Admin\SettingsViewController::class, 'adBoosterSettings'])->name('ad-booster');
+        Route::post('/ad-booster', [\App\Http\Controllers\Admin\SettingsViewController::class, 'updateAdBoosterSettings'])->name('ad-booster.update');
         Route::get('/kyc-settings', [\App\Http\Controllers\Admin\SettingsViewController::class, 'kycSettings'])->name('kyc-settings');
         Route::post('/kyc-settings', [\App\Http\Controllers\Admin\SettingsViewController::class, 'updateKycSettings'])->name('kyc-settings.update');
         

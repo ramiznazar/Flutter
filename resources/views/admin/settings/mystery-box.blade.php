@@ -16,16 +16,27 @@
             <div class="card-body">
                 <h4 class="mt-0 header-title">{{ ucfirst($boxType) }} Mystery Box Settings</h4>
                 <p class="text-muted mb-4 font-14">
-                    @if($boxType === 'legendary')
-                        Configure {{ $boxType }} mystery box. <strong>Legendary boxes reward boosters (2x, 3x, 5x) instead of coins.</strong>
-                    @else
-                        Configure {{ $boxType }} mystery box rewards and cooldowns.
-                    @endif
+                    Configure {{ $boxType }} mystery box. Choose reward type: <strong>Booster</strong> (2x, 3x, 5x with configurable duration) or <strong>Coins</strong>. Uncheck "Show in app" to hide this box from the API.
                 </p>
 
                 <form action="{{ route('admin.mystery-box.update') }}" method="POST">
                     @csrf
                     <input type="hidden" name="box_type" value="{{ $boxType }}" />
+
+                    <div class="form-group mb-3">
+                        <div class="custom-control custom-switch">
+                            <input type="checkbox"
+                                   class="custom-control-input"
+                                   id="enabled_{{ $boxType }}"
+                                   name="enabled"
+                                   value="1"
+                                   {{ old('enabled', $boxSettings[$boxType]['enabled'] ?? 1) ? 'checked' : '' }}>
+                            <label class="custom-control-label" for="enabled_{{ $boxType }}">
+                                Show in app (include in API)
+                            </label>
+                        </div>
+                        <small class="form-text text-muted">When unchecked, this box type is hidden from the app and not sent in the API.</small>
+                    </div>
                     
                     <div class="form-group mb-3">
                         <label class="mb-2">Cooldown (Minutes)</label>
@@ -45,79 +56,56 @@
                         @enderror
                     </div>
 
-                    @if($boxType === 'legendary')
-                        {{-- Legendary Box: Booster Configuration --}}
+                    {{-- Reward Type: Booster or Coins (all box types) --}}
+                    <div class="form-group mb-3">
+                        <label class="mb-2">Reward Type</label>
+                        <select class="form-control" name="reward_type" id="{{ $boxType }}_reward_type" required onchange="toggleRewardFields('{{ $boxType }}')">
+                            <option value="booster" {{ old('reward_type', $boxSettings[$boxType]['reward_type'] ?? 'booster') === 'booster' ? 'selected' : '' }}>Booster</option>
+                            <option value="coins" {{ old('reward_type', $boxSettings[$boxType]['reward_type'] ?? 'booster') === 'coins' ? 'selected' : '' }}>Coins</option>
+                        </select>
+                        <small class="form-text text-muted">Booster: user gets a random multiplier (e.g. 2x, 3x, 5x) for a set duration. Coins: random coin reward.</small>
+                        @error('reward_type')
+                            <div class="text-danger">{{ $message }}</div>
+                        @enderror
+                    </div>
+
+                    <div id="{{ $boxType }}_booster_fields" class="reward-fields" style="{{ ($boxSettings[$boxType]['reward_type'] ?? 'booster') === 'coins' ? 'display:none' : '' }}">
                         <div class="form-group mb-3">
-                            <label class="mb-2">Reward Type</label>
-                            <select class="form-control" name="reward_type" id="legendary_reward_type" required onchange="toggleLegendaryRewardFields()">
-                                <option value="booster" {{ old('reward_type', $boxSettings[$boxType]['reward_type'] ?? 'booster') === 'booster' ? 'selected' : '' }}>Booster (Recommended)</option>
-                                <option value="coins" {{ old('reward_type', $boxSettings[$boxType]['reward_type'] ?? 'booster') === 'coins' ? 'selected' : '' }}>Coins</option>
-                            </select>
-                            <small class="form-text text-muted">Legendary boxes should reward boosters (2x, 3x, 5x) for better user experience.</small>
-                            @error('reward_type')
+                            <label class="mb-2">Available Booster Types</label>
+                            <input type="text" class="form-control" name="booster_types" placeholder="2x,3x,5x" value="{{ old('booster_types', $boxSettings[$boxType]['booster_types'] ?? '2x,3x,5x') }}" />
+                            <small class="form-text text-muted">Comma-separated (e.g. 2x,3x,5x). One is randomly selected when box is opened.</small>
+                            @error('booster_types')
                                 <div class="text-danger">{{ $message }}</div>
                             @enderror
                         </div>
-
-                        <div id="legendary_booster_fields">
-                            <div class="form-group mb-3">
-                                <label class="mb-2">Available Booster Types</label>
-                                <input type="text" class="form-control" name="booster_types" required placeholder="2x,3x,5x" value="{{ old('booster_types', $boxSettings[$boxType]['booster_types'] ?? '2x,3x,5x') }}" />
-                                <small class="form-text text-muted">Comma-separated list of booster types (e.g., 2x,3x,5x). One will be randomly selected when box is opened.</small>
-                                @error('booster_types')
-                                    <div class="text-danger">{{ $message }}</div>
-                                @enderror
-                            </div>
-
-                            <div class="form-group mb-3">
-                                <label class="mb-2">Booster Duration (Hours)</label>
-                                <input type="number" step="0.1" class="form-control" name="booster_duration" required placeholder="10" min="0.1" max="168" value="{{ old('booster_duration', $boxSettings[$boxType]['booster_duration'] ?? 10.00) }}" />
-                                <small class="form-text text-muted">How long the booster will last (default: 10 hours). Maximum: 168 hours (7 days).</small>
-                                @error('booster_duration')
-                                    <div class="text-danger">{{ $message }}</div>
-                                @enderror
-                            </div>
+                        <div class="form-group mb-3">
+                            <label class="mb-2">Booster Duration (Hours)</label>
+                            <input type="number" step="0.1" class="form-control" name="booster_duration" placeholder="10" min="0.1" max="168" value="{{ old('booster_duration', $boxSettings[$boxType]['booster_duration'] ?? 10.00) }}" />
+                            <small class="form-text text-muted">How long the booster lasts (max 168 hours = 7 days).</small>
+                            @error('booster_duration')
+                                <div class="text-danger">{{ $message }}</div>
+                            @enderror
                         </div>
+                    </div>
 
-                        <div id="legendary_coins_fields" style="display: none;">
-                            <div class="form-group mb-3">
-                                <label class="mb-2">Minimum Coins</label>
-                                <input type="number" step="0.01" class="form-control" name="min_coins" placeholder="Enter minimum coins" min="0" value="{{ old('min_coins', $boxSettings[$boxType]['min_coins'] ?? 50.00) }}" />
-                                <small class="form-text text-muted">Minimum reward coins (only used if reward type is set to coins).</small>
-                                @error('min_coins')
-                                    <div class="text-danger">{{ $message }}</div>
-                                @enderror
-                            </div>
-
-                            <div class="form-group mb-3">
-                                <label class="mb-2">Maximum Coins</label>
-                                <input type="number" step="0.01" class="form-control" name="max_coins" placeholder="Enter maximum coins" min="0" value="{{ old('max_coins', $boxSettings[$boxType]['max_coins'] ?? 200.00) }}" />
-                                <small class="form-text text-muted">Maximum reward coins (only used if reward type is set to coins).</small>
-                                @error('max_coins')
-                                    <div class="text-danger">{{ $message }}</div>
-                                @enderror
-                            </div>
-                        </div>
-                    @else
-                        {{-- Other Boxes: Coins Configuration --}}
+                    <div id="{{ $boxType }}_coins_fields" class="reward-fields" style="{{ ($boxSettings[$boxType]['reward_type'] ?? 'booster') === 'coins' ? '' : 'display:none' }}">
                         <div class="form-group mb-3">
                             <label class="mb-2">Minimum Coins</label>
-                            <input type="number" step="0.01" class="form-control" name="min_coins" required placeholder="Enter minimum coins" min="0" value="{{ old('min_coins', $boxSettings[$boxType]['min_coins']) }}" />
-                            <small class="form-text text-muted">Minimum reward coins.</small>
+                            <input type="number" step="0.01" class="form-control" name="min_coins" placeholder="Min coins" min="0" value="{{ old('min_coins', $boxSettings[$boxType]['min_coins']) }}" />
+                            <small class="form-text text-muted">Minimum reward coins (when reward type is Coins).</small>
                             @error('min_coins')
                                 <div class="text-danger">{{ $message }}</div>
                             @enderror
                         </div>
-
                         <div class="form-group mb-3">
                             <label class="mb-2">Maximum Coins</label>
-                            <input type="number" step="0.01" class="form-control" name="max_coins" required placeholder="Enter maximum coins" min="0" value="{{ old('max_coins', $boxSettings[$boxType]['max_coins']) }}" />
-                            <small class="form-text text-muted">Maximum reward coins.</small>
+                            <input type="number" step="0.01" class="form-control" name="max_coins" placeholder="Max coins" min="0" value="{{ old('max_coins', $boxSettings[$boxType]['max_coins']) }}" />
+                            <small class="form-text text-muted">Maximum reward coins (when reward type is Coins).</small>
                             @error('max_coins')
                                 <div class="text-danger">{{ $message }}</div>
                             @enderror
                         </div>
-                    @endif
+                    </div>
 
                     <div class="form-group mb-0">
                         <button type="submit" class="btn btn-primary waves-effect waves-light">
@@ -134,35 +122,27 @@
 
 @push('scripts')
 <script>
-function toggleLegendaryRewardFields() {
-    const rewardType = document.getElementById('legendary_reward_type').value;
-    const boosterFields = document.getElementById('legendary_booster_fields');
-    const coinsFields = document.getElementById('legendary_coins_fields');
-    
-    if (rewardType === 'booster') {
-        boosterFields.style.display = 'block';
-        coinsFields.style.display = 'none';
-        // Make booster fields required
-        boosterFields.querySelector('input[name="booster_types"]').setAttribute('required', 'required');
-        boosterFields.querySelector('input[name="booster_duration"]').setAttribute('required', 'required');
-        // Remove required from coins fields
-        coinsFields.querySelector('input[name="min_coins"]').removeAttribute('required');
-        coinsFields.querySelector('input[name="max_coins"]').removeAttribute('required');
-    } else {
-        boosterFields.style.display = 'none';
-        coinsFields.style.display = 'block';
-        // Remove required from booster fields
-        boosterFields.querySelector('input[name="booster_types"]').removeAttribute('required');
-        boosterFields.querySelector('input[name="booster_duration"]').removeAttribute('required');
-        // Make coins fields required
-        coinsFields.querySelector('input[name="min_coins"]').setAttribute('required', 'required');
-        coinsFields.querySelector('input[name="max_coins"]').setAttribute('required', 'required');
-    }
+function toggleRewardFields(boxType) {
+    var sel = document.getElementById(boxType + '_reward_type');
+    var boosterEl = document.getElementById(boxType + '_booster_fields');
+    var coinsEl = document.getElementById(boxType + '_coins_fields');
+    if (!sel || !boosterEl || !coinsEl) return;
+    var isBooster = sel.value === 'booster';
+    boosterEl.style.display = isBooster ? 'block' : 'none';
+    coinsEl.style.display = isBooster ? 'none' : 'block';
+    var bt = boosterEl.querySelector('input[name="booster_types"]');
+    var bd = boosterEl.querySelector('input[name="booster_duration"]');
+    var mn = coinsEl.querySelector('input[name="min_coins"]');
+    var mx = coinsEl.querySelector('input[name="max_coins"]');
+    if (bt) bt.required = isBooster;
+    if (bd) bd.required = isBooster;
+    if (mn) mn.required = !isBooster;
+    if (mx) mx.required = !isBooster;
 }
-
-// Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
-    toggleLegendaryRewardFields();
+    ['common', 'rare', 'epic', 'legendary'].forEach(function(boxType) {
+        toggleRewardFields(boxType);
+    });
 });
 </script>
 @endpush

@@ -138,8 +138,10 @@ class MiningController extends Controller
             ? (float) $request->balance 
             : null;
 
+        // Select only columns used for mining logic and response (mining_start_balance needed for "still mining" branch)
         $user = User::where('email', $request->email)
             ->where('account_status', 'active')
+            ->select('id', 'token', 'coin', 'is_mining', 'mining_end_time', 'mining_time', 'mining_start_balance', 'total_invite', 'custom_coin_speed', 'invite_setup')
             ->first();
 
         if (!$user) {
@@ -218,42 +220,16 @@ class MiningController extends Controller
                 $totalMiningSeconds = (int) ($user->mining_time ?? $timeLimitInSec);
                 $elapsedMiningSeconds = $totalMiningSeconds - $elapsedSeconds;
                 
-                // Get current server balance
+                // Get current server balance for THIS user only (never use request balance — avoids wrong balance when switching accounts)
                 $currentServerBalance = (float) $user->token;
-                
-                // Calculate starting balance (balance when mining started)
-                // We estimate it by subtracting expected mined tokens from current balance
-                // This is an approximation since we don't store starting balance separately
-                $expectedMinedTokens = $addToken * $elapsedMiningSeconds;
-                $estimatedStartingBalance = max(0, $currentServerBalance - $expectedMinedTokens);
-                
-                // ✅ If frontend balance is provided (when reason == "get"), accept and store it
-                if ($request->reason === 'get' && $frontendBalance !== null && $frontendBalance >= 0) {
-                    // Accept frontend balance if it's higher or equal to current balance
-                    // This handles admin-given coins and real-time increments
-                    if ($frontendBalance >= $currentServerBalance) {
-                        // Store the frontend balance as the new current balance
-                        $user->update(['token' => $frontendBalance]);
-                        $currentBalance = $frontendBalance;
-                        // Recalculate starting balance based on new balance
-                        $estimatedStartingBalance = max(0, $frontendBalance - $expectedMinedTokens);
-                    } else {
-                        // Frontend balance is lower (shouldn't happen, but keep server balance)
-                        // Use server calculation instead
-                        $tokensEarned = $addToken * $elapsedMiningSeconds;
-                        $currentBalance = $currentServerBalance + $tokensEarned;
-                        // Update with calculated balance
-                        $user->update(['token' => $currentBalance]);
-                    }
-                } else {
-                    // Fallback to server calculation (backward compatibility)
-                    $tokensEarned = $addToken * $elapsedMiningSeconds;
-                    $currentBalance = $currentServerBalance + $tokensEarned;
-                    // Update with calculated balance
-                    $user->update(['token' => $currentBalance]);
-                }
-                
-                $startingBalance = $estimatedStartingBalance;
+                $tokensEarned = $addToken * $elapsedMiningSeconds;
+                $currentBalance = $currentServerBalance + $tokensEarned;
+                $user->update(['token' => $currentBalance]);
+
+                // Starting balance: use mining_start_balance if set, else estimate from current
+                $startingBalance = $user->mining_start_balance !== null
+                    ? (float) $user->mining_start_balance
+                    : max(0, $currentServerBalance - $tokensEarned);
                 
                 return response()->json([
                     'success' => true,
@@ -274,33 +250,12 @@ class MiningController extends Controller
             }
         }
 
-        // Handle "get" reason (sync request)
+        // Handle "get" reason (sync request) — always use server balance for THIS user (never request balance; avoids same balance for all accounts when switching users)
         if ($request->reason === 'get') {
-            // ✅ If frontend balance is provided, accept and store it
-            if ($frontendBalance !== null && $frontendBalance >= 0) {
-                $currentToken = (float) $user->token;
-                
-                // Accept frontend balance if it's higher or equal to current balance
-                // This handles admin-given coins and real-time increments
-                if ($frontendBalance >= $currentToken) {
-                    // Store the frontend balance as the new current balance
-                    $user->update(['token' => $frontendBalance]);
-                    $balance = $frontendBalance;
-                } else {
-                    // Frontend balance is lower (shouldn't happen, but keep server balance)
-                    $balance = $currentToken;
-                }
-            } else {
-                // No frontend balance provided, use current token (backward compatibility)
-                $balance = (float) $user->token;
-            }
-            
-            // Get starting balance (for reference - this is the balance when mining started)
-            // If mining is active, starting_balance is the balance at mining start
-            // If idle, starting_balance is the current balance
-            $startingBalance = $user->is_mining == 1 && $user->mining_end_time 
-                ? (float) $user->token // This should ideally be stored separately, but using token for now
-                : (float) $balance;
+            $balance = (float) $user->token;
+            $startingBalance = $user->mining_start_balance !== null
+                ? (float) $user->mining_start_balance
+                : $balance;
             
             return response()->json([
                 'success' => true,
@@ -350,14 +305,10 @@ class MiningController extends Controller
         $totalTime = $totalTime + $timeLimitInSec;
         $miningEndTime = Carbon::now()->addSeconds($totalTime)->format('Y-m-d-H:i:s');
         
-        // ✅ Get current balance (this will be the starting balance for this mining session)
-        // If frontend balance is provided, use it; otherwise use current token
-        $startingBalance = $frontendBalance !== null && $frontendBalance >= 0 
-            ? $frontendBalance 
-            : (float) $user->token;
-        
+        // Use THIS user's server balance only (never request balance — avoids wrong/same balance when switching accounts)
+        $startingBalance = (float) $user->token;
+
         // Store starting balance separately for backend-managed mining
-        // Backend will calculate balance from this starting point
 
         DB::beginTransaction();
 
@@ -644,7 +595,15 @@ class MiningController extends Controller
                 $join->on('social_media_setting.' . $pk, '=', 'social_media_tokens.social_media_id')
                      ->where('social_media_tokens.user_id', '=', $user->id);
             })
-            ->select('social_media_setting.*')
+            ->select([
+                'social_media_setting.' . $pk,
+                'social_media_setting.Name',
+                'social_media_setting.Icon',
+                'social_media_setting.Link',
+                'social_media_setting.Token',
+                'social_media_setting.task_type',
+                'social_media_setting.Status',
+            ])
             ->selectRaw('CASE WHEN social_media_tokens.user_id IS NOT NULL THEN 1 ELSE 0 END AS claimed')
             ->orderBy('social_media_setting.' . $pk)
             ->get();
@@ -674,7 +633,8 @@ class MiningController extends Controller
     }
 
     /**
-     * Get daily reward status (check if user can claim)
+     * Get daily reward status: 3 rewards per 12-hour period, 5 min cooldown between each.
+     * State is stored server-side (daily_reward_claims) so it persists after logout.
      */
     public function getDailyRewardStatus(Request $request)
     {
@@ -683,164 +643,219 @@ class MiningController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Email is required'
-            ], 400);
+            return response()->json(['success' => false, 'message' => 'Email is required'], 400);
         }
 
-        $user = User::where('email', $request->email)
-            ->where('account_status', 'active')
-            ->first();
-
+        $user = User::where('email', $request->email)->where('account_status', 'active')->select('id')->first();
         if (!$user) {
-            return response()->json([
-                'success' => false,
-                'message' => 'User not found or account not active'
-            ], 404);
+            return response()->json(['success' => false, 'message' => 'User not found or account not active'], 404);
         }
 
         $now = Carbon::now();
-        $twentyFourHoursAgo = $now->copy()->subHours(24);
-
-        // Check if daily_reward_claims table exists and has data
-        try {
-            $lastClaim = DB::table('daily_reward_claims')
-                ->where('user_id', $user->id)
-                ->where('claimed_at', '>=', $twentyFourHoursAgo)
-                ->orderBy('claimed_at', 'desc')
-                ->first();
-
-            if ($lastClaim) {
-                $nextAvailableAt = Carbon::parse($lastClaim->claimed_at)->addHours(24);
-                $secondsUntilAvailable = $now->diffInSeconds($nextAvailableAt);
-                
-                return response()->json([
-                    'success' => true,
-                    'claimed' => true,
-                    'last_claimed_at' => $lastClaim->claimed_at,
-                    'coins_claimed' => (float) $lastClaim->coins_claimed,
-                    'next_available_at' => $nextAvailableAt->format('Y-m-d H:i:s'),
-                    'seconds_until_available' => $secondsUntilAvailable
-                ]);
-            }
-        } catch (\Exception $e) {
-            // Table might not exist or have different structure - return available
-            Log::warning('Daily reward claims table check failed: ' . $e->getMessage());
+        $cooldownMinutes = 5;
+        $cooldownSeconds = $cooldownMinutes * 60;
+        $periodHours = 12;
+        // Current 12-hour period start: 00:00 or 12:00 (server time)
+        $periodStart = $now->copy()->startOfDay();
+        if ($now->hour >= 12) {
+            $periodStart->addHours(12);
         }
+        $periodEnd = $periodStart->copy()->addHours($periodHours);
+        $maxPerPeriod = 3;
 
-        return response()->json([
-            'success' => true,
-            'claimed' => false,
-            'available' => true,
-            'message' => 'Daily reward is available'
-        ]);
+        try {
+            $claimsThisPeriod = DB::table('daily_reward_claims')
+                ->where('user_id', $user->id)
+                ->where('claimed_at', '>=', $periodStart)
+                ->where('claimed_at', '<', $periodEnd)
+                ->orderBy('claimed_at', 'desc')
+                ->get(['claimed_at', 'coins_claimed']);
+
+            $claimedCount = $claimsThisPeriod->count();
+            $lastClaim = $claimsThisPeriod->first();
+
+            $canClaim = false;
+            $cooldownUntil = null;
+            $secondsRemaining = 0;
+            $nextPeriodReset = $periodEnd->format('Y-m-d H:i:s');
+            $nextAvailableAt = $periodEnd->format('Y-m-d H:i:s');
+
+            if ($claimedCount >= $maxPerPeriod) {
+                $canClaim = false;
+                $secondsRemaining = max(0, (int) $now->diffInSeconds($periodEnd, false));
+                $nextAvailableAt = $nextPeriodReset;
+            } elseif ($lastClaim && $lastClaim->claimed_at !== null) {
+                $lastAt = $lastClaim->claimed_at instanceof Carbon ? $lastClaim->claimed_at : Carbon::parse($lastClaim->claimed_at);
+                $elapsed = $now->diffInSeconds($lastAt, false);
+                if ($elapsed < $cooldownSeconds) {
+                    $cooldownUntil = $lastAt->copy()->addSeconds($cooldownSeconds);
+                    $secondsRemaining = (int) $now->diffInSeconds($cooldownUntil, false);
+                    $secondsRemaining = max(0, $secondsRemaining);
+                    $canClaim = false;
+                    $nextAvailableAt = $cooldownUntil->format('Y-m-d H:i:s');
+                } else {
+                    $canClaim = true;
+                }
+            } else {
+                $canClaim = true;
+            }
+
+            $lastClaimedAtFormatted = $lastClaim && $lastClaim->claimed_at !== null
+                ? (Carbon::parse($lastClaim->claimed_at))->format('Y-m-d H:i:s')
+                : '';
+            $lastCoinsClaimed = $lastClaim && isset($lastClaim->coins_claimed) ? (float) $lastClaim->coins_claimed : 0;
+
+            $payload = [
+                'success' => true,
+                'claimed' => $claimedCount > 0,
+                'available' => $canClaim,
+                'message' => $canClaim ? 'Daily reward is available' : ($claimedCount >= $maxPerPeriod ? 'All 3 rewards claimed. Resets in 12 hours.' : 'Cooldown active. Wait 5 minutes.'),
+                'claimed_count' => $claimedCount,
+                'max_per_period' => $maxPerPeriod,
+                'can_claim' => $canClaim,
+                'cooldown_minutes' => $cooldownMinutes,
+                'cooldown_until' => $cooldownUntil ? $cooldownUntil->format('Y-m-d H:i:s') : '',
+                'seconds_remaining' => $secondsRemaining,
+                'seconds_until_available' => $secondsRemaining,
+                'next_period_reset' => $nextPeriodReset,
+                'next_available_at' => $nextAvailableAt,
+                'period_reset_in_seconds' => max(0, (int) $now->diffInSeconds($periodEnd, false)),
+            ];
+
+            if ($claimedCount > 0 && $lastClaim) {
+                $payload['last_claimed_at'] = $lastClaimedAtFormatted;
+                $payload['coins_claimed'] = $lastCoinsClaimed;
+            } else {
+                $payload['last_claimed_at'] = '';
+                $payload['coins_claimed'] = 0;
+            }
+
+            return response()->json($payload);
+        } catch (\Exception $e) {
+            Log::warning('Daily reward status check failed: ' . $e->getMessage());
+            return response()->json([
+                'success' => true,
+                'claimed' => false,
+                'available' => true,
+                'message' => 'Daily reward is available',
+                'claimed_count' => 0,
+                'max_per_period' => 3,
+                'can_claim' => true,
+                'cooldown_minutes' => 5,
+                'cooldown_until' => '',
+                'seconds_remaining' => 0,
+                'seconds_until_available' => 0,
+                'last_claimed_at' => '',
+                'coins_claimed' => 0,
+                'next_available_at' => '',
+            ]);
+        }
     }
 
     /**
-     * Add daily reward coins to user's wallet
-     * User watches ad and gets 2-4 coins (frontend manages timer)
-     * Enforces 24-hour cooldown between claims
+     * Add daily reward: 3 rewards per 12-hour period, 5 min cooldown between each.
+     * State stored in daily_reward_claims so it persists after logout.
      */
     public function addDailyReward(Request $request)
     {
         $validator = Validator::make($request->all(), [
             'email' => 'required|email',
-            'coins' => 'required|numeric|min:0|max:10', // Allow 0-10 coins for flexibility
+            'coins' => 'nullable|numeric|min:0|max:10',
         ]);
 
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
-                'message' => $validator->errors()->first() ?? 'Missing required fields'
+                'message' => $validator->errors()->first() ?? 'Email is required',
             ], 400);
         }
 
-        $user = User::where('email', $request->email)
-            ->where('account_status', 'active')
-            ->first();
-
+        $user = User::where('email', $request->email)->where('account_status', 'active')->select('id', 'is_mining', 'mining_start_balance')->first();
         if (!$user) {
-            return response()->json([
-                'success' => false,
-                'message' => 'User not found or account not active'
-            ], 404);
+            return response()->json(['success' => false, 'message' => 'User not found or account not active'], 404);
         }
 
         $now = Carbon::now();
-        $twentyFourHoursAgo = $now->copy()->subHours(24);
+        $cooldownMinutes = 5;
+        $cooldownSeconds = $cooldownMinutes * 60;
+        $periodHours = 12;
+        $periodStart = $now->copy()->startOfDay();
+        if ($now->hour >= 12) {
+            $periodStart->addHours(12);
+        }
+        $periodEnd = $periodStart->copy()->addHours($periodHours);
+        $maxPerPeriod = 3;
 
-        // Check if user claimed daily reward within last 24 hours
         try {
-            $lastClaim = DB::table('daily_reward_claims')
+            $claimsThisPeriod = DB::table('daily_reward_claims')
                 ->where('user_id', $user->id)
-                ->where('claimed_at', '>=', $twentyFourHoursAgo)
+                ->where('claimed_at', '>=', $periodStart)
+                ->where('claimed_at', '<', $periodEnd)
                 ->orderBy('claimed_at', 'desc')
-                ->first();
+                ->get();
 
-            if ($lastClaim) {
-                $nextAvailableAt = Carbon::parse($lastClaim->claimed_at)->addHours(24);
-                $secondsUntilAvailable = $now->diffInSeconds($nextAvailableAt);
-                
+            $claimedCount = $claimsThisPeriod->count();
+            $lastClaim = $claimsThisPeriod->first();
+
+            if ($claimedCount >= $maxPerPeriod) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Daily reward already claimed. Available again in 24 hours.',
-                    'next_available_at' => $nextAvailableAt->format('Y-m-d H:i:s'),
-                    'seconds_until_available' => $secondsUntilAvailable
+                    'message' => 'All 3 daily rewards claimed. Resets in 12 hours.',
+                    'next_period_reset' => $periodEnd->format('Y-m-d H:i:s'),
+                    'period_reset_in_seconds' => max(0, (int) $now->diffInSeconds($periodEnd, false)),
                 ], 400);
             }
+
+            if ($lastClaim) {
+                $lastAt = Carbon::parse($lastClaim->claimed_at);
+                if ($now->diffInSeconds($lastAt, false) < $cooldownSeconds) {
+                    $cooldownUntil = $lastAt->copy()->addSeconds($cooldownSeconds);
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Cooldown active. Wait 5 minutes between rewards.',
+                        'cooldown_until' => $cooldownUntil->format('Y-m-d H:i:s'),
+                        'seconds_remaining' => max(0, (int) $now->diffInSeconds($cooldownUntil, false)),
+                    ], 400);
+                }
+            }
         } catch (\Exception $e) {
-            // Table might not exist - log and continue (will create record)
-            Log::warning('Daily reward claims table check failed: ' . $e->getMessage());
+            Log::warning('Daily reward claim check failed: ' . $e->getMessage());
         }
 
-        $coins = (float) $request->coins;
-
-        // If coins not provided or 0, generate random 2-4 coins
+        $coins = $request->has('coins') ? (float) $request->coins : 0;
         if ($coins <= 0) {
-            $coins = round(rand(200, 400) / 100, 2); // Random between 2.00 and 4.00
+            $coins = round(rand(200, 400) / 100, 2);
         }
 
         DB::beginTransaction();
-
         try {
-            // Add coins to mining balance (token)
             $user->increment('token', $coins);
-            
-            // If mining is active, adjust mining_start_balance so balance calculation continues correctly
             if ($user->is_mining == 1 && $user->mining_start_balance !== null) {
                 $user->increment('mining_start_balance', $coins);
             }
-            
-            // Record the claim for 24-hour cooldown tracking
-            try {
-                DB::table('daily_reward_claims')->insert([
-                    'user_id' => $user->id,
-                    'coins_claimed' => $coins,
-                    'claimed_at' => $now
-                ]);
-            } catch (\Exception $e) {
-                // Table might not exist - log but don't fail
-                Log::warning('Failed to record daily reward claim: ' . $e->getMessage());
-            }
-            
+            DB::table('daily_reward_claims')->insert([
+                'user_id' => $user->id,
+                'coins_claimed' => $coins,
+                'claimed_at' => $now,
+            ]);
             $user->refresh();
-
             DB::commit();
 
+            $newCount = $claimedCount + 1;
             return response()->json([
                 'success' => true,
                 'message' => 'Daily reward coins added successfully',
                 'coins_added' => $coins,
                 'new_balance' => (float) $user->token,
-                'is_mining_active' => $user->is_mining == 1
+                'is_mining_active' => $user->is_mining == 1,
+                'claimed_count' => $newCount,
+                'max_per_period' => $maxPerPeriod,
+                'can_claim_again_in_seconds' => $cooldownSeconds,
+                'next_period_reset' => $periodEnd->format('Y-m-d H:i:s'),
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json([
-                'success' => false,
-                'message' => 'Error adding coins: ' . $e->getMessage()
-            ], 500);
+            return response()->json(['success' => false, 'message' => 'Error adding coins: ' . $e->getMessage()], 500);
         }
     }
 
@@ -956,9 +971,10 @@ class MiningController extends Controller
         // Calculate token_per_sec directly from mining speed (coins per hour)
         $tokenPerSec = (float) $effectiveMiningSpeed / 3600;
 
-        // Optimize: Get active booster with select and limit
+        // Optimize: Get active booster with select and limit (guard null expires_at to avoid crash)
         $booster = \App\Models\UserBooster::where('user_id', $user->id)
             ->where('is_active', 1)
+            ->whereNotNull('expires_at')
             ->where('expires_at', '>', Carbon::now())
             ->select('booster_type', 'expires_at')
             ->orderBy('created_at', 'desc')
@@ -970,12 +986,19 @@ class MiningController extends Controller
         $boosterExpiresAt = null;
         $boosterSecondsRemaining = 0;
 
-        if ($booster) {
+        if ($booster && $booster->expires_at !== null) {
+            $expiresAtCarbon = $booster->expires_at instanceof \Carbon\Carbon
+                ? $booster->expires_at
+                : Carbon::parse($booster->expires_at);
             $hasActiveBooster = true;
-            $boosterType = $booster->booster_type;
-            $boosterMultiplier = (float) str_replace('x', '', $boosterType);
-            $boosterExpiresAt = $booster->expires_at->format('Y-m-d H:i:s');
-            $boosterSecondsRemaining = Carbon::now()->diffInSeconds($booster->expires_at);
+            $boosterType = $booster->booster_type ?? '2x';
+            $multiplier = (float) str_replace('x', '', $boosterType);
+            $boosterMultiplier = $multiplier >= 1.0 ? $multiplier : 1.0;
+            $boosterExpiresAt = $expiresAtCarbon->format('Y-m-d H:i:s');
+            $boosterSecondsRemaining = (int) Carbon::now()->diffInSeconds($expiresAtCarbon, false);
+            if ($boosterSecondsRemaining < 0) {
+                $boosterSecondsRemaining = 0;
+            }
             $tokenPerSec = $tokenPerSec * $boosterMultiplier;
         }
 
@@ -998,6 +1021,9 @@ class MiningController extends Controller
         if ($isMining) {
             $miningEndTime = $user->mining_end_time;
             $miningEndTimeCarbon = Carbon::createFromFormat('Y-m-d-H:i:s', $user->mining_end_time);
+            if ($miningEndTimeCarbon === false) {
+                $miningEndTimeCarbon = Carbon::parse($user->mining_end_time);
+            }
             $now = Carbon::now();
 
             if ($now->gt($miningEndTimeCarbon)) {

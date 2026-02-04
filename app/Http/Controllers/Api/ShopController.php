@@ -25,7 +25,7 @@ class ShopController extends Controller
             ], 400);
         }
 
-        $user = User::where('email', $request->email)->first();
+        $user = User::where('email', $request->email)->select('id')->first();
 
         if (!$user) {
             return response()->json([
@@ -33,46 +33,53 @@ class ShopController extends Controller
             ], 404);
         }
 
-        $page = $request->input('page', 1);
-        $perPage = $request->input('perPage', 10);
-        $offset = ($page - 1) * $perPage;
+        $page = (int) $request->input('page', 1);
+        $perPage = (int) $request->input('perPage', 10);
+        $offset = max(0, ($page - 1) * $perPage);
 
-        // Get shops with view status
+        // Get shops with view status — select only columns used in response (Shop primary key is ID)
         $shops = Shop::leftJoin('shop_views', function($join) use ($user) {
-                $join->on('shop.id', '=', 'shop_views.Shop_ID')
+                $join->on('shop.ID', '=', 'shop_views.Shop_ID')
                      ->where('shop_views.User_ID', '=', $user->id);
             })
-            ->select('shop.*')
+            ->select('shop.ID', 'shop.Image', 'shop.Title', 'shop.Link', 'shop.CreatedAt', 'shop.Likes')
             ->selectRaw('IF(shop_views.Shop_ID IS NOT NULL, 1, 0) AS isliked')
-            ->orderBy('shop.id', 'desc')
+            ->orderBy('shop.ID', 'desc')
             ->offset($offset)
             ->limit($perPage)
             ->get();
 
+        $shopIds = $shops->pluck('ID')->toArray();
+        $allViewers = [];
+        if (!empty($shopIds)) {
+            $viewersData = ShopView::whereIn('Shop_ID', $shopIds)
+                ->join('users', 'shop_views.User_ID', '=', 'users.id')
+                ->select('shop_views.Shop_ID', 'users.ban_reason', 'shop_views.CreatedAt')
+                ->orderBy('shop_views.Shop_ID')
+                ->orderBy('shop_views.CreatedAt', 'desc')
+                ->get();
+            foreach ($viewersData->groupBy('Shop_ID') as $shopId => $group) {
+                $allViewers[$shopId] = $group->take(3)->pluck('ban_reason')->toArray();
+            }
+        }
+
         $shopData = [];
         foreach ($shops as $item) {
-            // Get top 3 viewers
-            $viewers = ShopView::where('Shop_ID', $item->id)
-                ->join('users', 'shop_views.User_ID', '=', 'users.id')
-                ->select('users.ban_reason')
-                ->orderBy('shop_views.CreatedAt', 'desc')
-                ->limit(3)
-                ->pluck('ban_reason')
-                ->toArray();
-
+            $shopId = $item->ID ?? $item->id;
             $shopData[] = [
-                'id' => $item->id,
+                'id' => $shopId,
                 'image' => $item->Image,
                 'title' => $item->Title,
                 'webLink' => $item->Link,
                 'createdAt' => $item->CreatedAt,
                 'views' => $item->Likes,
                 'isViewed' => (bool) $item->isliked,
-                'lastViewers' => $viewers
+                'lastViewers' => $allViewers[$shopId] ?? []
             ];
         }
 
-        $totalPages = ceil(Shop::count() / $perPage);
+        $totalCount = Shop::count();
+        $totalPages = $perPage > 0 ? (int) ceil($totalCount / $perPage) : 0;
 
         return response()->json([
             'totalPages' => $totalPages,

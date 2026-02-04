@@ -10,16 +10,17 @@ class GiveawayController extends Controller
 {
     public function getGiveaway(Request $request)
     {
-        $page = $request->input('page', 1);
-        $perPage = $request->input('perPage', 10);
-        $offset = ($page - 1) * $perPage;
+        $page = (int) $request->input('page', 1);
+        $perPage = (int) $request->input('perPage', 10);
+        $offset = max(0, ($page - 1) * $perPage);
 
+        $totalCount = Giveaway::count();
         $giveaways = Giveaway::orderBy('created_at', 'desc')
             ->offset($offset)
             ->limit($perPage)
             ->get();
 
-        $totalPages = ceil(Giveaway::count() / $perPage);
+        $totalPages = $perPage > 0 ? (int) ceil($totalCount / $perPage) : 0;
 
         return response()->json([
             'totalPages' => $totalPages,

@@ -29,9 +29,16 @@ class AuthController extends Controller
             ], 400);
         }
 
+        // Select only columns needed for login response to reduce load under high concurrency
         $user = User::where('email', $request->email)
             ->where('password', $request->password) // Note: Original uses plain password
             ->where('account_status', 'active')
+            ->select([
+                'id', 'name', 'email', 'password', 'phone', 'country', 'token', 'coin',
+                'is_mining', 'mining_end_time', 'last_active', 'mining_time', 'username',
+                'username_count', 'total_invite', 'invite_setup', 'account_status',
+                'ban_reason', 'ban_date', 'join_date',
+            ])
             ->first();
 
         if (!$user) {
@@ -47,8 +54,10 @@ class AuthController extends Controller
         $authToken = Str::random(64);
         $user->update(['auth_token' => $authToken]);
 
-        // Get user guide
-        $userGuide = UserGuide::where('userID', $user->id)->first();
+        // Get user guide — select only columns used in response
+        $userGuide = UserGuide::where('userID', $user->id)
+            ->select(['home', 'mining', 'wallet', 'badges', 'level', 'teamProfile', 'news', 'shop', 'userProfile'])
+            ->first();
         
         if (!$userGuide) {
             $userGuide = [
@@ -76,6 +85,10 @@ class AuthController extends Controller
             ];
         }
 
+        // Mining balance (token) formatted like mining API so app shows correct amount before mining starts (no 30/50 placeholder)
+        $miningBalance = (float) ($user->token ?? 0);
+        $balanceFormatted = number_format($miningBalance, 10, '.', '');
+
         $response = [
             'id' => $user->id,
             'name' => $user->name,
@@ -85,6 +98,7 @@ class AuthController extends Controller
             'country' => $user->country,
             'token' => $user->token,
             'coin' => $user->coin,
+            'balance' => $balanceFormatted,
             'is_mining' => $user->is_mining,
             'mining_end_time' => $user->mining_end_time,
             'last_active' => $user->last_active,
@@ -101,7 +115,8 @@ class AuthController extends Controller
             'auth_token' => $authToken
         ];
 
-        return response()->json($response, 200);
+        return response()->json($response, 200)
+            ->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
     }
 
     public function signup(Request $request)

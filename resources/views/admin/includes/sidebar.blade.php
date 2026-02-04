@@ -87,6 +87,13 @@
                     </a>
                 </li>
 
+                <li>
+                    <a href="{{ route('admin.ad-booster') }}" class="waves-effect {{ request()->routeIs('admin.ad-booster') ? 'active' : '' }}">
+                        <i class="mdi mdi-run-fast"></i>
+                        <span> Ad Booster Settings </span>
+                    </a>
+                </li>
+
                 <li class="menu-title">User Management</li>
 
                 <li>

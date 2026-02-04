@@ -17,13 +17,13 @@ class UsersManageController extends Controller
     {
         // Fast path for Flutter getUserCoinsBalance:
         // Frontend calls: GET /api/admin/users_manage?email=abc@gmail.com
-        // We only need a single user's coin balance, so avoid full paginated query.
+        // App displays coins_balance as the main mining balance — return mining token here so it shows correct value (e.g. 195) not spending coin (50).
         if ($request->has('email')) {
             $email = $request->query('email');
 
             $user = User::where('account_status', 'active')
                 ->where('email', $email)
-                ->select('id', 'username', 'email', 'name', 'coin', 'join_date')
+                ->select('id', 'username', 'email', 'name', 'coin', 'token', 'join_date')
                 ->first();
 
             if (!$user) {
@@ -33,8 +33,11 @@ class UsersManageController extends Controller
                     'total' => 0,
                     'page' => 1,
                     'perPage' => 1,
-                ]);
+                ])->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
             }
+
+            $miningBalance = (float) ($user->token ?? 0);
+            $balanceFormatted = number_format($miningBalance, 10, '.', '');
 
             $mapped = [
                 'id' => $user->id,
@@ -42,7 +45,9 @@ class UsersManageController extends Controller
                 'username' => $user->username ?: 'N/A',
                 'email' => $user->email,
                 'name' => $user->name,
-                'coins_balance' => (float) $user->coin,
+                'coins_balance' => $miningBalance,
+                'balance' => $balanceFormatted,
+                'spending_coin' => (float) $user->coin,
                 'type' => 'user',
                 'join_date' => $user->join_date,
             ];
@@ -53,7 +58,7 @@ class UsersManageController extends Controller
                 'total' => 1,
                 'page' => 1,
                 'perPage' => 1,
-            ]);
+            ])->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
         }
 
         // Default admin panel listing (paginated)

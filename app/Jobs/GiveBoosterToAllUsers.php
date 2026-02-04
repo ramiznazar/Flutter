@@ -67,7 +67,6 @@ class GiveBoosterToAllUsers implements ShouldQueue
                             'expires_at' => $this->expiresAt,
                             'is_active' => 1,
                             'created_at' => $now,
-                            'updated_at' => $now
                         ];
                     }
                     
