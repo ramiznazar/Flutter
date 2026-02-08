@@ -5,13 +5,17 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\MiningController;
+use App\Http\Controllers\Api\MiningProxyController;
 use App\Http\Controllers\Api\TaskController;
+use App\Http\Controllers\Api\TaskProxyController;
 use App\Http\Controllers\Api\KycController;
+use App\Http\Controllers\Api\KycProxyController;
 use App\Http\Controllers\Api\NewsController;
 use App\Http\Controllers\Api\ShopController;
 use App\Http\Controllers\Api\GiveawayController;
 use App\Http\Controllers\Api\BoosterController;
 use App\Http\Controllers\Api\MysteryBoxController;
+use App\Http\Controllers\Api\GamificationProxyController;
 use App\Http\Controllers\Api\SpinController;
 use App\Http\Controllers\Api\SettingsController;
 use App\Http\Controllers\Api\Admin\AdminController;
@@ -61,52 +65,40 @@ Route::post('/setup_invite', [UserController::class, 'setupInvite']);
 Route::post('/delete_account_request', [UserController::class, 'deleteAccountRequest']);
 Route::post('/reactivate_account', [UserController::class, 'reactivateAccount']);
 
-// Mining Routes
-Route::post('/start_mining', [MiningController::class, 'startMining']);
-Route::get('/mining_status', [MiningController::class, 'miningStatus']); // New endpoint for polling
-Route::post('/start_coin', [MiningController::class, 'startCoin']);
-Route::post('/claim_bonus', [MiningController::class, 'claimBonus']);
-Route::post('/bonus_history', [MiningController::class, 'bonusHistory']);
-Route::post('/social_claim', [MiningController::class, 'socialClaim']);
-Route::post('/social_list', [MiningController::class, 'socialList']);
-Route::post('/add_daily_reward', [MiningController::class, 'addDailyReward']); // Add daily reward coins (watch ad reward)
-Route::post('/get_daily_reward_status', [MiningController::class, 'getDailyRewardStatus']); // Get daily reward claim status
+// Mining Routes (gateway: when MINING_SERVICE_ENABLED=true, proxy to mining service; else local MiningController)
+Route::post('/start_mining', [MiningProxyController::class, 'startMining']);
+Route::get('/mining_status', [MiningProxyController::class, 'miningStatus']);
+Route::post('/start_coin', [MiningProxyController::class, 'startCoin']);
+Route::post('/claim_bonus', [MiningProxyController::class, 'claimBonus']);
+Route::post('/bonus_history', [MiningProxyController::class, 'bonusHistory']);
+Route::post('/social_claim', [MiningProxyController::class, 'socialClaim']);
+Route::post('/social_list', [MiningProxyController::class, 'socialList']);
+Route::post('/add_daily_reward', [MiningProxyController::class, 'addDailyReward']);
+Route::post('/get_daily_reward_status', [MiningProxyController::class, 'getDailyRewardStatus']);
 
-// Task Routes
-Route::post('/task_start', [TaskController::class, 'taskStart']);
-Route::post('/task_claim_reward', [TaskController::class, 'taskClaimReward']);
-Route::post('/task_track', [TaskController::class, 'trackTask']);
-Route::post('/get_daily_tasks', [TaskController::class, 'getDailyTasks']); // Get daily tasks with user's claim status
+// Task Routes (gateway: when TASK_SERVICE_ENABLED=true, proxy to task service; else local TaskController)
+Route::post('/task_start', [TaskProxyController::class, 'taskStart']);
+Route::post('/task_claim_reward', [TaskProxyController::class, 'taskClaimReward']);
+Route::post('/task_track', [TaskProxyController::class, 'trackTask']);
+Route::post('/get_daily_tasks', [TaskProxyController::class, 'getDailyTasks']);
 
-// Booster Routes
-Route::post('/booster_status', [BoosterController::class, 'boosterStatus']);
-Route::post('/booster_claim', [BoosterController::class, 'boosterClaim']);
+// Gamification Routes (gateway: when GAMIFICATION_SERVICE_ENABLED=true, proxy to gamification service; else local)
+Route::post('/booster_status', [GamificationProxyController::class, 'boosterStatus']);
+Route::post('/booster_claim', [GamificationProxyController::class, 'boosterClaim']);
+Route::post('/mystery_box_watch_ad', [GamificationProxyController::class, 'mysteryBoxWatchAd']);
+Route::post('/mystery_box_click', [GamificationProxyController::class, 'mysteryBoxClick']);
+Route::post('/mystery_box_open', [GamificationProxyController::class, 'mysteryBoxOpen']);
+Route::post('/mystery_box_details', [GamificationProxyController::class, 'mysteryBoxDetails']);
+Route::post('/ad_booster_status', [GamificationProxyController::class, 'adBoosterStatus']);
+Route::post('/ad_booster_claim', [GamificationProxyController::class, 'adBoosterClaim']);
 
-// Mystery Box Routes
-Route::post('/mystery_box_watch_ad', [MysteryBoxController::class, 'watchAd']);
-Route::post('/mystery_box_click', [MysteryBoxController::class, 'click']);
-Route::post('/mystery_box_open', [MysteryBoxController::class, 'open']);
-Route::post('/mystery_box_details', [MysteryBoxController::class, 'getDetails']);
-
-// Ad Booster Routes (watch ad → get speed booster, 8hr cooldown, max 3 per day)
-Route::post('/ad_booster_status', [\App\Http\Controllers\Api\AdBoosterController::class, 'status']);
-Route::post('/ad_booster_claim', [\App\Http\Controllers\Api\AdBoosterController::class, 'claim']);
-
-// KYC Routes
-Route::post('/kyc_check_eligibility', [KycController::class, 'checkEligibility']);
-Route::match(['get', 'post'], '/kyc_submit', function(Request $request) {
-    if ($request->isMethod('get')) {
-        return response()->json([
-            'success' => false,
-            'message' => 'This endpoint only accepts POST requests. Please use POST method with required fields: email, full_name, dob, front_image, back_image.'
-        ], 405);
-    }
-    return app(\App\Http\Controllers\Api\KycController::class)->submit($request);
-});
-Route::post('/submit_kyc', [KycController::class, 'submit']); // Alias
-Route::post('/kyc_get_status', [KycController::class, 'getStatus']);
-Route::post('/get_kyc_progress', [KycController::class, 'getProgress']);
-Route::post('/didit_create_request', [KycController::class, 'diditCreateRequest']);
+// KYC Routes (gateway: when KYC_SERVICE_ENABLED=true, proxy to KYC service; else local KycController)
+Route::post('/kyc_check_eligibility', [KycProxyController::class, 'checkEligibility']);
+Route::match(['get', 'post'], '/kyc_submit', [KycProxyController::class, 'submit']);
+Route::post('/submit_kyc', [KycProxyController::class, 'submit']); // Alias
+Route::post('/kyc_get_status', [KycProxyController::class, 'getStatus']);
+Route::post('/get_kyc_progress', [KycProxyController::class, 'getProgress']);
+Route::post('/didit_create_request', [KycProxyController::class, 'diditCreateRequest']);
 
 // News Routes
 Route::post('/get_all_news', [NewsController::class, 'getAllNews']);

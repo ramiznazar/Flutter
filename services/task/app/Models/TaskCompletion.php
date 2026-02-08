@@ -1,0 +1,38 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class TaskCompletion extends Model
+{
+    protected $table = 'task_completions';
+
+    public $timestamps = false;
+
+    protected $primaryKey = 'id';
+    public $incrementing = true;
+    protected $keyType = 'int';
+
+    protected $fillable = [
+        'user_id', 'task_id', 'task_type', 'started_at',
+        'reward_available_at', 'reward_claimed', 'reward_claimed_at', 'created_at',
+    ];
+
+    protected $casts = [
+        'started_at' => 'datetime',
+        'reward_available_at' => 'datetime',
+        'reward_claimed_at' => 'datetime',
+        'reward_claimed' => 'boolean',
+    ];
+
+    public function user()
+    {
+        return $this->belongsTo(User::class, 'user_id');
+    }
+
+    public function task()
+    {
+        return $this->belongsTo(SocialMediaSetting::class, 'task_id');
+    }
+}

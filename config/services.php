@@ -31,4 +31,39 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Internal Microservices (Gateway proxy targets)
+    |--------------------------------------------------------------------------
+    | When enabled, the monolith forwards requests to the corresponding service.
+    | Public API paths and request/response stay unchanged for Flutter.
+    */
+    'mining' => [
+        'url' => env('MINING_SERVICE_URL', 'http://127.0.0.1:8001'),
+        'enabled' => env('MINING_SERVICE_ENABLED', false),
+        'timeout' => (int) env('MINING_SERVICE_TIMEOUT', 10),
+    ],
+    'task' => [
+        'url' => env('TASK_SERVICE_URL', 'http://127.0.0.1:8002'),
+        'enabled' => env('TASK_SERVICE_ENABLED', false),
+        'timeout' => (int) env('TASK_SERVICE_TIMEOUT', 10),
+    ],
+    'gamification' => [
+        'url' => env('GAMIFICATION_SERVICE_URL', 'http://127.0.0.1:8003'),
+        'enabled' => env('GAMIFICATION_SERVICE_ENABLED', false),
+        'timeout' => (int) env('GAMIFICATION_SERVICE_TIMEOUT', 10),
+    ],
+    'kyc' => [
+        'url' => env('KYC_SERVICE_URL', 'http://127.0.0.1:8004'),
+        'enabled' => env('KYC_SERVICE_ENABLED', false),
+        'timeout' => (int) env('KYC_SERVICE_TIMEOUT', 10),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Internal API secret (gateway -> service)
+    |--------------------------------------------------------------------------
+    */
+    'internal_api_secret' => env('INTERNAL_API_SECRET', ''),
+
 ];

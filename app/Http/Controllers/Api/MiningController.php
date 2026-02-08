@@ -13,6 +13,11 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 
+/**
+ * Mining API. Balance, token, and mining state (coin, is_mining, mining_end_time, etc.)
+ * must never be read from cache — always read/write from MySQL so Flutter never gets stale data.
+ * See docs/MICROSERVICES_IMPLEMENTATION_TRACKER.md (Redis rules).
+ */
 class MiningController extends Controller
 {
     private function getUserPerks($userId)
