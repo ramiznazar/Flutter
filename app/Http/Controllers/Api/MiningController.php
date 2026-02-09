@@ -255,13 +255,22 @@ class MiningController extends Controller
             }
         }
 
-        // Handle "get" reason (sync request) — always use server balance for THIS user (never request balance; avoids same balance for all accounts when switching users)
+        // Handle "get" reason (sync request)
         if ($request->reason === 'get') {
             $balance = (float) $user->token;
             $startingBalance = $user->mining_start_balance !== null
                 ? (float) $user->mining_start_balance
                 : $balance;
-            
+
+            // When app sends balance (e.g. after daily reward), persist it so users_manage and next login show it
+            if ($request->has('balance') && is_numeric($request->balance)) {
+                $requestBalance = (float) $request->balance;
+                if ($requestBalance >= 0) {
+                    $user->update(['token' => $requestBalance]);
+                    $balance = $requestBalance;
+                }
+            }
+
             return response()->json([
                 'success' => true,
                 'message' => $user->is_mining == 1 ? 'in_progress' : 'idle',

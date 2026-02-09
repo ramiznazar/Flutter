@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::middleware('internal.secret')->group(function () {
+    Route::post('/user_mining_stats', [InternalMiningController::class, 'userMiningStats']);
     Route::post('/start_mining', [InternalMiningController::class, 'startMining']);
     Route::get('/mining_status', [InternalMiningController::class, 'miningStatus']);
     Route::post('/start_coin', [InternalMiningController::class, 'startCoin']);

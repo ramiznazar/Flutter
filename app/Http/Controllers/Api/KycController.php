@@ -4,9 +4,9 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
-use App\Models\UserLevel;
 use App\Models\Setting;
 use App\Models\KycSubmission;
+use App\Services\MiningStatsService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
@@ -41,9 +41,9 @@ class KycController extends Controller
         $miningSessionsRequired = $settings ? (int) $settings->kyc_mining_sessions : 14;
         $referralsRequired = $settings ? (int) $settings->kyc_referrals_required : 10;
 
-        // Get user's mining sessions
-        $userLevel = UserLevel::where('user_id', $user->id)->first();
-        $miningSessions = $userLevel ? (int) $userLevel->mining_session : 0;
+        // Get user's mining sessions (from mining service when enabled, synced to local)
+        $stats = MiningStatsService::getAndSyncMiningStats($user->id, $request->email);
+        $miningSessions = $stats['mining_session'];
 
         // Get user's referrals
         $referrals = (int) $user->total_invite;

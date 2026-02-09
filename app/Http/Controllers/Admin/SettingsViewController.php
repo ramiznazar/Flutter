@@ -344,12 +344,12 @@ class SettingsViewController extends Controller
         $settings = Setting::first();
 
         $appSettings = [
-            'maintenance' => (int) ($settings->maintenance ?? 0),
-            'maintenance_message' => (string) ($settings->maintenance_message ?? ''),
-            'force_update' => (int) ($settings->force_update ?? 0),
-            'update_version' => (string) ($settings->update_version ?? config('app.mobile_app_version', '1.1.9')),
-            'update_message' => (string) ($settings->update_message ?? ''),
-            'update_link' => (string) ($settings->update_link ?? ''),
+            'maintenance' => (int) ($settings?->maintenance ?? 0),
+            'maintenance_message' => (string) ($settings?->maintenance_message ?? ''),
+            'force_update' => (int) ($settings?->force_update ?? 0),
+            'update_version' => (string) ($settings?->update_version ?? config('app.mobile_app_version', '1.1.9')),
+            'update_message' => (string) ($settings?->update_message ?? ''),
+            'update_link' => (string) ($settings?->update_link ?? ''),
         ];
 
         return view('admin.settings.app', compact('appSettings'));

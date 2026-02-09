@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -67,6 +68,7 @@ class MiningProxyController extends Controller
 
     /**
      * If mining service is enabled, forward to it (with one retry on failure). Otherwise run the local callback.
+     * On connection failure, timeout, or non-success response we fall back to local so the app never gets 502.
      */
     private function proxyOrLocal(string $method, string $internalPath, Request $request, callable $local): mixed
     {
@@ -96,28 +98,59 @@ class MiningProxyController extends Controller
                 ->post($url);
         };
 
-        $response = $attempt();
-        if ($response->failed() && $response->clientError() === false) {
+        try {
             $response = $attempt();
+            if ($response->failed() && $response->clientError() === false) {
+                $response = $attempt();
+            }
+
+            if ($response->successful()) {
+                $json = $response->json();
+                $this->syncBalanceToLocal($request, $internalPath, $json);
+                return response()->json($json, $response->status());
+            }
+
+            $status = $response->status();
+            $body = $response->json();
+            if (is_array($body)) {
+                return response()->json($body, $status);
+            }
+            Log::warning('Mining proxy received non-JSON or error, falling back to local', [
+                'url' => $url,
+                'path' => $internalPath,
+                'status' => $status,
+                'body' => substr((string) $response->body(), 0, 500),
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('Mining proxy request failed, falling back to local', [
+                'url' => $url,
+                'path' => $internalPath,
+                'message' => $e->getMessage(),
+            ]);
         }
 
-        if ($response->successful()) {
-            return response()->json($response->json(), $response->status());
-        }
+        return $local();
+    }
 
-        $status = $response->status();
-        $body = $response->json();
-        if (is_array($body)) {
-            return response()->json($body, $status);
+    /**
+     * When mining service is enabled, sync balance from proxy response to local user.token
+     * so GET /api/admin/users_manage returns the correct balance (e.g. after daily reward on mining service).
+     */
+    private function syncBalanceToLocal(Request $request, string $internalPath, array $json): void
+    {
+        $balance = null;
+        if (isset($json['balance']) && is_numeric($json['balance'])) {
+            $balance = (float) $json['balance'];
+        } elseif (isset($json['new_balance']) && is_numeric($json['new_balance'])) {
+            $balance = (float) $json['new_balance'];
         }
-        Log::warning('Mining proxy received non-JSON or error', [
-            'url' => $url,
-            'status' => $status,
-            'body' => $response->body(),
-        ]);
-        return response()->json(
-            ['success' => false, 'message' => 'Mining service unavailable'],
-            $status >= 500 ? $status : 502
-        );
+        if ($balance === null) {
+            return;
+        }
+        $email = $request->input('email') ?? $request->query('email');
+        if (empty($email) || ! filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return;
+        }
+        User::where('email', $email)->update(['token' => $balance]);
     }
 }

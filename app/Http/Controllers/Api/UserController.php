@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\UserLevel;
+use App\Services\MiningStatsService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Carbon\Carbon;
@@ -35,8 +36,7 @@ class UserController extends Controller
             ], 404);
         }
 
-        $userLevel = UserLevel::where('user_id', $user->id)->select('mining_session')->first();
-        $miningSessions = $userLevel ? (int) $userLevel->mining_session : 0;
+        $stats = MiningStatsService::getAndSyncMiningStats($user->id, $request->email);
 
         return response()->json([
             'success' => true,
@@ -44,7 +44,7 @@ class UserController extends Controller
             'data' => [
                 'email' => $user->email,
                 'user_id' => $user->id,
-                'mining_sessions' => $miningSessions,
+                'mining_sessions' => $stats['mining_session'],
                 'referrals' => (int) $user->total_invite
             ]
         ]);
@@ -274,9 +274,10 @@ class UserController extends Controller
             ->select('current_level', 'mining_session')
             ->first();
         $currentLevelId = $userLevel ? (int) $userLevel->current_level : 1;
-        
-        // Get user stats
-        $miningSessions = $userLevel ? (int) $userLevel->mining_session : 0;
+
+        $stats = MiningStatsService::getAndSyncMiningStats($user->id, $request->email);
+        $miningSessions = $stats['mining_session'];
+        $spinWheel = $stats['spin_wheel'];
         $totalInvite = (int) $user->total_invite;
         $accountAgeDays = $user->join_date ? \Carbon\Carbon::parse($user->join_date)->diffInDays(\Carbon\Carbon::now()) : 0;
         
@@ -409,22 +410,68 @@ class UserController extends Controller
             ];
         }
 
+        // Frontend expects data.level.current_level.stats (total_mined_sessions, etc.) and data.level.next_level.criteria
+        $currentLevelName = $currentLevel ? ($currentLevel->lvl_name ?? 'Novice') : 'Novice';
+        $currentLevelPayload = [
+            'level' => (string) $currentLevelId,
+            'level_id' => (string) $currentLevelId,
+            'name' => $currentLevelName,
+            'perks' => [
+                'crutox_per_time' => (string) ($currentLevelPerks['crutox_per_time'] ?? '0.5'),
+                'mining_time_hours' => (string) ($currentLevelPerks['mining_time_hours'] ?? '12'),
+                'crutox_reward' => (string) ($currentLevelPerks['crutox_reward'] ?? '0'),
+                'other_access' => $currentLevelPerks['other_access'] ?? null,
+            ],
+            'stats' => [
+                'total_mined_sessions' => (string) $miningSessions,
+                'total_spun_wheels' => (string) $spinWheel,
+                'old_account_days' => (int) $accountAgeDays,
+                'total_invites' => (string) $totalInvite,
+            ],
+        ];
+
+        $nextLevelId = $nextLevel ? $nextLevel->id : $currentLevelId;
+        $nextLevelName = $nextLevel ? ($nextLevel->lvl_name ?? 'Level ' . $nextLevelId) : $currentLevelName;
+        $nextLevelCriteria = [
+            'mining_sessions' => (string) ($nextLevel ? (int) $nextLevel->mining_sessions : 0),
+            'spin_wheel' => (string) ($nextLevel ? (int) ($nextLevel->spin_wheel ?? 0) : 0),
+            'total_invite' => (string) ($nextLevel ? (int) $nextLevel->total_invite : 0),
+            'user_account_old' => (string) ($nextLevel ? (int) $nextLevel->user_account_old : 0),
+        ];
+        $nextLevelPerks = $nextLevel ? [
+            'crutox_per_time' => (string) ((float) ($nextLevel->perk_crutox_per_time ?? 0.5)),
+            'mining_time_hours' => (string) ((int) ($nextLevel->perk_mining_time ?? 12)),
+            'crutox_reward' => (string) ((float) ($nextLevel->perk_crutox_reward ?? 0)),
+            'other_access' => $nextLevel->perk_other_access ?? null,
+        ] : $currentLevelPayload['perks'];
+
+        $nextLevelPayloadForApp = [
+            'level' => (string) $nextLevelId,
+            'level_id' => (string) $nextLevelId,
+            'name' => $nextLevelName,
+            'perks' => $nextLevelPerks,
+            'criteria' => $nextLevelCriteria,
+        ];
+
         return response()->json([
             'success' => true,
             'data' => [
-                'level' => $currentLevelId,
+                'level' => [
+                    'current_level' => $currentLevelPayload,
+                    'next_level' => $nextLevelPayloadForApp,
+                ],
                 'current_level' => [
                     'id' => $currentLevelId,
-                    'name' => $currentLevel ? ($currentLevel->lvl_name ?? 'Novice') : 'Novice',
-                    'perks' => $currentLevelPerks
+                    'name' => $currentLevelName,
+                    'perks' => $currentLevelPerks,
                 ],
                 'next_level' => $nextLevelPayload,
                 'all_levels' => $levelsData,
                 'user_stats' => [
                     'mining_sessions' => $miningSessions,
                     'total_invite' => $totalInvite,
-                    'account_age_days' => $accountAgeDays
-                ]
+                    'account_age_days' => $accountAgeDays,
+                ],
             ]
         ]);
     }
@@ -471,8 +518,9 @@ class UserController extends Controller
             $userLevel = \App\Models\UserLevel::where('user_id', $user->id)->select('mining_session', 'spin_wheel')->first();
         }
 
-        $miningSessions = $userLevel ? (int) $userLevel->mining_session : 0;
-        $spinWheel = $userLevel ? (int) $userLevel->spin_wheel : 0;
+        $stats = MiningStatsService::getAndSyncMiningStats($user->id, $request->email);
+        $miningSessions = $stats['mining_session'];
+        $spinWheel = $stats['spin_wheel'];
         $totalInvite = (int) $user->total_invite;
         $token = (float) $user->token;
 
@@ -500,6 +548,7 @@ class UserController extends Controller
         }
         $earnedBadges[] = [
             'title' => 'Newbie Explorer: Once User Creates Account',
+            'description' => 'Once User Creates Account',
             'earned' => !empty($user->join_date),
             'progress' => null,
             'total' => null,
@@ -511,11 +560,15 @@ class UserController extends Controller
                 continue;
             }
 
+            $title = (string) ($badge->badge_name ?? '');
+            $colonPos = strpos($title, ':');
+            $description = $colonPos !== false ? trim(substr($title, $colonPos + 1)) : '';
             $badgeData = [
-                'title' => (string) ($badge->badge_name ?? ''),
+                'title' => $title,
+                'description' => $description,
                 'earned' => false,
-                'progress' => null,
-                'total' => null,
+                'progress' => 0,
+                'total' => 0,
                 'badges_icon' => null,
             ];
 
@@ -547,7 +600,7 @@ class UserController extends Controller
                 $badgeData['earned'] = $token >= $req;
             } elseif ($socialReq !== 0) {
                 $badgeData['progress'] = (int) $completedSocialMediaTasks;
-                $badgeData['total'] = (int) $totalSocialMediaTasks;
+                $badgeData['total'] = (int) max(1, $totalSocialMediaTasks);
                 $badgeData['earned'] = $totalSocialMediaTasks > 0 && $completedSocialMediaTasks >= $totalSocialMediaTasks;
             }
 

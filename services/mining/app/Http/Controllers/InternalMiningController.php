@@ -76,6 +76,40 @@ class InternalMiningController extends Controller
         UserLevel::where('user_id', $userId)->increment('mining_session');
     }
 
+    /**
+     * Return user_levels stats (mining_session, spin_wheel) for getLevel/getBadges on the monolith.
+     * POST /internal/user_mining_stats — body: { "email": "..." }
+     */
+    public function userMiningStats(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'email' => 'required|email',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['success' => false, 'message' => 'Email is required'], 400);
+        }
+
+        $user = User::where('email', $request->email)->select('id')->first();
+        if (!$user) {
+            return response()->json([
+                'success' => true,
+                'mining_session' => 0,
+                'spin_wheel' => 0,
+            ]);
+        }
+
+        $userLevel = UserLevel::where('user_id', $user->id)->select('mining_session', 'spin_wheel')->first();
+        $miningSession = $userLevel ? (int) $userLevel->mining_session : 0;
+        $spinWheel = $userLevel ? (int) $userLevel->spin_wheel : 0;
+
+        return response()->json([
+            'success' => true,
+            'mining_session' => $miningSession,
+            'spin_wheel' => $spinWheel,
+        ]);
+    }
+
     private function getOrCreateCoinSettings(): CoinSetting
     {
         $c = CoinSetting::first();
@@ -231,6 +265,14 @@ class InternalMiningController extends Controller
             $startingBalance = $user->mining_start_balance !== null
                 ? (float) $user->mining_start_balance
                 : $balance;
+
+            if ($request->has('balance') && is_numeric($request->balance)) {
+                $requestBalance = (float) $request->balance;
+                if ($requestBalance >= 0) {
+                    User::where('id', $user->id)->update(['token' => $requestBalance]);
+                    $balance = $requestBalance;
+                }
+            }
 
             return response()->json([
                 'success' => true,
