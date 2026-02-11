@@ -1025,6 +1025,7 @@ class InternalMiningController extends Controller
                 'user_id' => $user->id,
                 'coins_claimed' => $coins,
                 'claimed_at' => $now,
+                'next_available_at' => $now->copy()->addMinutes(5),
             ]);
             $user->refresh();
             DB::commit();

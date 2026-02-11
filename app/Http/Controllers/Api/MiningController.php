@@ -784,7 +784,7 @@ class MiningController extends Controller
             ], 400);
         }
 
-        $user = User::where('email', $request->email)->where('account_status', 'active')->select('id', 'is_mining', 'mining_start_balance')->first();
+        $user = User::where('email', $request->email)->where('account_status', 'active')->select('id', 'token', 'is_mining', 'mining_start_balance')->first();
         if (!$user) {
             return response()->json(['success' => false, 'message' => 'User not found or account not active'], 404);
         }
@@ -800,6 +800,8 @@ class MiningController extends Controller
         $periodEnd = $periodStart->copy()->addHours($periodHours);
         $maxPerPeriod = 3;
 
+        $claimedCount = 0;
+        $lastClaim = null;
         try {
             $claimsThisPeriod = DB::table('daily_reward_claims')
                 ->where('user_id', $user->id)
@@ -807,39 +809,56 @@ class MiningController extends Controller
                 ->where('claimed_at', '<', $periodEnd)
                 ->orderBy('claimed_at', 'desc')
                 ->get();
-
             $claimedCount = $claimsThisPeriod->count();
             $lastClaim = $claimsThisPeriod->first();
-
-            if ($claimedCount >= $maxPerPeriod) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'All 3 daily rewards claimed. Resets in 12 hours.',
-                    'next_period_reset' => $periodEnd->format('Y-m-d H:i:s'),
-                    'period_reset_in_seconds' => max(0, (int) $now->diffInSeconds($periodEnd, false)),
-                ], 400);
-            }
-
-            if ($lastClaim) {
-                $lastAt = Carbon::parse($lastClaim->claimed_at);
-                if ($now->diffInSeconds($lastAt, false) < $cooldownSeconds) {
-                    $cooldownUntil = $lastAt->copy()->addSeconds($cooldownSeconds);
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'Cooldown active. Wait 5 minutes between rewards.',
-                        'cooldown_until' => $cooldownUntil->format('Y-m-d H:i:s'),
-                        'seconds_remaining' => max(0, (int) $now->diffInSeconds($cooldownUntil, false)),
-                    ], 400);
-                }
-            }
         } catch (\Exception $e) {
             Log::warning('Daily reward claim check failed: ' . $e->getMessage());
+        }
+
+        $currentBalance = (float) $user->token;
+
+        // Already at max for this period: return 200 with coins_added=0 (do not reject as error)
+        if ($claimedCount >= $maxPerPeriod) {
+            return response()->json([
+                'success' => true,
+                'message' => 'All 3 daily rewards claimed for this period. Resets in 12 hours.',
+                'coins_added' => 0,
+                'new_balance' => $currentBalance,
+                'is_mining_active' => $user->is_mining == 1,
+                'claimed_count' => $claimedCount,
+                'max_per_period' => $maxPerPeriod,
+                'can_claim_again_in_seconds' => max(0, (int) $now->diffInSeconds($periodEnd, false)),
+                'next_period_reset' => $periodEnd->format('Y-m-d H:i:s'),
+            ], 200);
+        }
+
+        // Duplicate: claimed within cooldown window — return 200 with coins_added=0 (credit exactly once, no double credit)
+        if ($lastClaim) {
+            $lastAt = Carbon::parse($lastClaim->claimed_at);
+            if ($now->diffInSeconds($lastAt, false) < $cooldownSeconds) {
+                $cooldownUntil = $lastAt->copy()->addSeconds($cooldownSeconds);
+                $secsRemaining = max(0, (int) $now->diffInSeconds($cooldownUntil, false));
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Reward already credited. Next claim available after cooldown.',
+                    'coins_added' => 0,
+                    'new_balance' => $currentBalance,
+                    'is_mining_active' => $user->is_mining == 1,
+                    'claimed_count' => $claimedCount,
+                    'max_per_period' => $maxPerPeriod,
+                    'can_claim_again_in_seconds' => $secsRemaining,
+                    'cooldown_until' => $cooldownUntil->format('Y-m-d H:i:s'),
+                    'next_period_reset' => $periodEnd->format('Y-m-d H:i:s'),
+                ], 200);
+            }
         }
 
         $coins = $request->has('coins') ? (float) $request->coins : 0;
         if ($coins <= 0) {
             $coins = round(rand(200, 400) / 100, 2);
         }
+
+        $nextAvailableAt = $now->copy()->addMinutes($cooldownMinutes);
 
         DB::beginTransaction();
         try {
@@ -851,6 +870,7 @@ class MiningController extends Controller
                 'user_id' => $user->id,
                 'coins_claimed' => $coins,
                 'claimed_at' => $now,
+                'next_available_at' => $nextAvailableAt,
             ]);
             $user->refresh();
             DB::commit();
@@ -866,10 +886,11 @@ class MiningController extends Controller
                 'max_per_period' => $maxPerPeriod,
                 'can_claim_again_in_seconds' => $cooldownSeconds,
                 'next_period_reset' => $periodEnd->format('Y-m-d H:i:s'),
-            ]);
+            ], 200);
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json(['success' => false, 'message' => 'Error adding coins: ' . $e->getMessage()], 500);
+            Log::error('add_daily_reward insert failed', ['message' => $e->getMessage(), 'user_id' => $user->id]);
+            return response()->json(['success' => false, 'message' => 'Error adding coins. Please try again.'], 500);
         }
     }
 
